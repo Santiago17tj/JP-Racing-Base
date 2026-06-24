@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
+import 'core/config/app_config.dart';
 import 'core/services/supabase_service.dart';
 import 'core/theme/app_theme.dart';
 import 'data/providers/auth_provider.dart';
@@ -21,12 +22,11 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  const supabaseUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: '');
-  const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
-
-  if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
-    await SupabaseService.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
-  }
+  // Inicializar Supabase con credenciales del proyecto
+  await SupabaseService.initialize(
+    url: AppConfig.supabaseUrl,
+    anonKey: AppConfig.supabaseAnonKey,
+  );
 
   runApp(const MotoTallerApp());
 }
@@ -45,7 +45,7 @@ class MotoTallerApp extends StatelessWidget {
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {
           return MaterialApp(
-            title: 'MotoTaller & Facturación',
+            title: AppConfig.appName,
             debugShowCheckedModeBanner: false,
             theme: AppTheme.darkTheme,
             home: auth.isAuthenticated ? const HomeShell() : const LoginScreen(),
