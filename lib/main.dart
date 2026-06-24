@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'core/config/app_config.dart';
 import 'core/services/supabase_service.dart';
 import 'core/theme/app_theme.dart';
@@ -15,18 +14,24 @@ import 'ui/screens/login_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (kIsWeb) {
-    databaseFactory = databaseFactoryFfiWeb;
-  } else {
+  // ── Base de datos local (SQLite) ─────────────────────────
+  // NOTA: En web, DatabaseHelper usa listas en memoria (no SQLite real).
+  // Solo inicializamos sqflite en plataformas nativas (desktop/mobile).
+  if (!kIsWeb) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
 
-  // Inicializar Supabase con credenciales del proyecto
-  await SupabaseService.initialize(
-    url: AppConfig.supabaseUrl,
-    anonKey: AppConfig.supabaseAnonKey,
-  );
+  // ── Supabase (cloud) — con manejo de error para no bloquear la app ──
+  try {
+    await SupabaseService.initialize(
+      url: AppConfig.supabaseUrl,
+      anonKey: AppConfig.supabaseAnonKey,
+    );
+    debugPrint('✅ Supabase conectado: ${AppConfig.supabaseUrl}');
+  } catch (e) {
+    debugPrint('⚠️ Supabase no disponible — modo offline: $e');
+  }
 
   runApp(const MotoTallerApp());
 }
