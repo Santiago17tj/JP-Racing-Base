@@ -69,6 +69,12 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Permite ingresar a la aplicación en modo demo sin cuenta de Supabase.
+  void bypassAuthentication() {
+    _isAuthenticated = true;
+    notifyListeners();
+  }
+
   /// Limpia el error manualmente (para UX)
   void clearError() {
     _error = null;

@@ -87,9 +87,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: () => setState(() => _isSignUp = !_isSignUp),
-                    child: Text(_isSignUp ? 'Ya tengo cuenta' : 'Crear una cuenta'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: () => setState(() => _isSignUp = !_isSignUp),
+                        child: Text(_isSignUp ? 'Ya tengo cuenta' : 'Crear una cuenta'),
+                      ),
+                      TextButton(
+                        onPressed: () => auth.bypassAuthentication(),
+                        child: const Text('Modo Demo (Offline)', style: TextStyle(color: AppTheme.primaryLight)),
+                      ),
+                    ],
                   ),
                 ],
               ),
