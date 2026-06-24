@@ -1,0 +1,39 @@
+name: moto_taller_app
+description: App de gestión de taller de motocicletas y facturación rápida.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.3.2
+  path: ^1.9.0
+  provider: ^6.1.2
+  uuid: ^4.3.3
+  intl: ^0.19.0
+  google_fonts: ^6.2.1
+  flutter_animate: ^4.5.0
+  cupertino_icons: ^1.0.8
+  sqflite_common_ffi: ^2.4.2
+  sqflite_common_ffi_web: ^1.1.2
+  url_launcher: ^6.3.2
+  pdf: ^3.13.0
+  printing: ^5.15.0
+  path_provider: ^2.1.6
+  supabase_flutter: ^2.3.0
+  image_picker: ^1.0.0
+  cached_network_image: ^3.4.1
+  google_sign_in: ^6.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - Imagenes/ChatGPT Image 24 jun 2026, 01_34_18 p.m..png
