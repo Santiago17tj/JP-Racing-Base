@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -10,6 +11,16 @@ import 'data/providers/inventario_provider.dart';
 import 'data/providers/ordenes_provider.dart';
 import 'ui/screens/home_shell.dart';
 import 'ui/screens/login_screen.dart';
+
+/// Soporta scroll de arrastre mediante mouse y trackpad en Web y Desktop.
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+      };
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,6 +64,7 @@ class MotoTallerApp extends StatelessWidget {
             title: AppConfig.appName,
             debugShowCheckedModeBanner: false,
             theme: AppTheme.darkTheme,
+            scrollBehavior: AppScrollBehavior(),
             home: auth.isAuthenticated ? const HomeShell() : const LoginScreen(),
           );
         },

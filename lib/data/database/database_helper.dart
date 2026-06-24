@@ -8,6 +8,8 @@ import '../models/vehiculo.dart';
 import '../models/orden_mantenimiento.dart';
 import '../models/orden_item.dart';
 import '../../core/constants/enums.dart';
+import '../../core/services/supabase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Singleton para operaciones CRUD sobre la Base de Datos.
 ///
@@ -190,43 +192,125 @@ class DatabaseHelper {
   }
 
   // ──────────────────────────────────────────────
+  //  Mapeos y Helpers para Supabase / DB
+  // ──────────────────────────────────────────────
+
+  bool get _useCloud => SupabaseService.isConfigured && SupabaseService.client.auth.currentUser != null;
+
+  Map<String, dynamic> _prepareToDb(Map<String, dynamic> map, {bool forSupabase = false}) {
+    final newMap = Map<String, dynamic>.from(map);
+    
+    if (newMap.containsKey('mecanico_assigned')) {
+      newMap['mecanico_asignado'] = newMap.remove('mecanico_assigned');
+    }
+    
+    if (newMap.containsKey('activo')) {
+      final val = newMap['activo'];
+      if (forSupabase) {
+        newMap['activo'] = (val == 1 || val == true);
+      } else {
+        newMap['activo'] = (val == true || val == 1) ? 1 : 0;
+      }
+    }
+    
+    return newMap;
+  }
+
+  Map<String, dynamic> _prepareFromDb(Map<String, dynamic> map) {
+    final newMap = Map<String, dynamic>.from(map);
+    
+    if (newMap.containsKey('mecanico_asignado')) {
+      newMap['mecanico_assigned'] = newMap['mecanico_asignado'];
+    }
+    
+    if (newMap.containsKey('activo')) {
+      final val = newMap['activo'];
+      newMap['activo'] = (val == true || val == 1) ? 1 : 0;
+    }
+    
+    return newMap;
+  }
+
+  // ──────────────────────────────────────────────
   //  CRUD: Clientes
   // ──────────────────────────────────────────────
 
   Future<void> insertCliente(Cliente cliente) async {
+    final map = cliente.toMap();
+    if (_useCloud) {
+      try {
+        final cloudMap = _prepareToDb(map, forSupabase: true);
+        await SupabaseService.client.from('clientes').upsert(cloudMap);
+      } catch (e) {
+        debugPrint('Error inserting cliente to Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       _webClientes.removeWhere((c) => c['id'] == cliente.id);
-      _webClientes.add(cliente.toMap());
+      _webClientes.add(map);
       return;
     }
     final db = await database;
-    await db.insert('clientes', cliente.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final localMap = _prepareToDb(map, forSupabase: false);
+    await db.insert('clientes', localMap, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Cliente>> getClientes() async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('clientes')
+            .select()
+            .eq('activo', true)
+            .order('nombre');
+        final list = (response as List)
+            .map((m) => Cliente.fromMap(_prepareFromDb(m as Map<String, dynamic>)))
+            .toList();
+        return list;
+      } catch (e) {
+        debugPrint('Error fetching clientes from Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final list = _webClientes
           .where((c) => c['activo'] == 1)
-          .map((m) => Cliente.fromMap(m))
+          .map((m) => Cliente.fromMap(_prepareFromDb(m)))
           .toList();
       list.sort((a, b) => a.nombre.compareTo(b.nombre));
       return list;
     }
     final db = await database;
     final maps = await db.query('clientes', where: 'activo = 1', orderBy: 'nombre ASC');
-    return maps.map((m) => Cliente.fromMap(m)).toList();
+    return maps.map((m) => Cliente.fromMap(_prepareFromDb(m))).toList();
   }
 
   Future<Cliente?> getCliente(String id) async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('clientes')
+            .select()
+            .eq('id', id)
+            .maybeSingle();
+        if (response != null) {
+          return Cliente.fromMap(_prepareFromDb(response as Map<String, dynamic>));
+        }
+      } catch (e) {
+        debugPrint('Error fetching cliente from Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final matches = _webClientes.where((c) => c['id'] == id);
       if (matches.isEmpty) return null;
-      return Cliente.fromMap(matches.first);
+      return Cliente.fromMap(_prepareFromDb(matches.first));
     }
     final db = await database;
     final maps = await db.query('clientes', where: 'id = ?', whereArgs: [id]);
     if (maps.isEmpty) return null;
-    return Cliente.fromMap(maps.first);
+    return Cliente.fromMap(_prepareFromDb(maps.first));
   }
 
   // ──────────────────────────────────────────────
@@ -234,37 +318,78 @@ class DatabaseHelper {
   // ──────────────────────────────────────────────
 
   Future<void> insertVehiculo(Vehiculo vehiculo) async {
+    final map = vehiculo.toMap();
+    if (_useCloud) {
+      try {
+        final cloudMap = _prepareToDb(map, forSupabase: true);
+        await SupabaseService.client.from('vehiculos').upsert(cloudMap);
+      } catch (e) {
+        debugPrint('Error inserting vehiculo to Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       _webVehiculos.removeWhere((v) => v['id'] == vehiculo.id);
-      _webVehiculos.add(vehiculo.toMap());
+      _webVehiculos.add(map);
       return;
     }
     final db = await database;
-    await db.insert('vehiculos', vehiculo.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final localMap = _prepareToDb(map, forSupabase: false);
+    await db.insert('vehiculos', localMap, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Vehiculo>> getVehiculosPorCliente(String clienteId) async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('vehiculos')
+            .select()
+            .eq('cliente_id', clienteId)
+            .eq('activo', true);
+        return (response as List)
+            .map((m) => Vehiculo.fromMap(_prepareFromDb(m as Map<String, dynamic>)))
+            .toList();
+      } catch (e) {
+        debugPrint('Error fetching vehiculos from Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       return _webVehiculos
           .where((v) => v['cliente_id'] == clienteId && v['activo'] == 1)
-          .map((m) => Vehiculo.fromMap(m))
+          .map((m) => Vehiculo.fromMap(_prepareFromDb(m)))
           .toList();
     }
     final db = await database;
     final maps = await db.query('vehiculos', where: 'cliente_id = ? AND activo = 1', whereArgs: [clienteId]);
-    return maps.map((m) => Vehiculo.fromMap(m)).toList();
+    return maps.map((m) => Vehiculo.fromMap(_prepareFromDb(m))).toList();
   }
 
   Future<Vehiculo?> getVehiculo(String id) async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('vehiculos')
+            .select()
+            .eq('id', id)
+            .maybeSingle();
+        if (response != null) {
+          return Vehiculo.fromMap(_prepareFromDb(response as Map<String, dynamic>));
+        }
+      } catch (e) {
+        debugPrint('Error fetching vehiculo from Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final matches = _webVehiculos.where((v) => v['id'] == id);
       if (matches.isEmpty) return null;
-      return Vehiculo.fromMap(matches.first);
+      return Vehiculo.fromMap(_prepareFromDb(matches.first));
     }
     final db = await database;
     final maps = await db.query('vehiculos', where: 'id = ?', whereArgs: [id]);
     if (maps.isEmpty) return null;
-    return Vehiculo.fromMap(maps.first);
+    return Vehiculo.fromMap(_prepareFromDb(maps.first));
   }
 
   // ──────────────────────────────────────────────
@@ -272,13 +397,24 @@ class DatabaseHelper {
   // ──────────────────────────────────────────────
 
   Future<void> insertRepuesto(Repuesto repuesto) async {
+    final map = repuesto.toMap();
+    if (_useCloud) {
+      try {
+        final cloudMap = _prepareToDb(map, forSupabase: true);
+        await SupabaseService.client.from('inventario_repuestos').upsert(cloudMap);
+      } catch (e) {
+        debugPrint('Error inserting repuesto to Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       _webRepuestos.removeWhere((r) => r['id'] == repuesto.id);
-      _webRepuestos.add(repuesto.toMap());
+      _webRepuestos.add(map);
       return;
     }
     final db = await database;
-    await db.insert('inventario_repuestos', repuesto.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final localMap = _prepareToDb(map, forSupabase: false);
+    await db.insert('inventario_repuestos', localMap, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Repuesto>> getRepuestos({
@@ -286,6 +422,33 @@ class DatabaseHelper {
     String? categoria,
     bool soloStockBajo = false,
   }) async {
+    if (_useCloud) {
+      try {
+        var query = SupabaseService.client.from('inventario_repuestos').select().eq('activo', true);
+        if (categoria != null) {
+          query = query.eq('categoria', categoria);
+        }
+        final response = await query;
+        var list = (response as List)
+            .map((m) => Repuesto.fromMap(_prepareFromDb(m as Map<String, dynamic>)))
+            .toList();
+
+        if (busqueda != null && busqueda.isNotEmpty) {
+          final q = busqueda.toLowerCase();
+          list = list.where((r) =>
+              r.nombre.toLowerCase().contains(q) ||
+              r.codigoInterno.toLowerCase().contains(q)).toList();
+        }
+        if (soloStockBajo) {
+          list = list.where((r) => r.stockActual <= r.stockMinimo).toList();
+        }
+        list.sort((a, b) => a.nombre.compareTo(b.nombre));
+        return list;
+      } catch (e) {
+        debugPrint('Error fetching repuestos from Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       var filtered = _webRepuestos.where((r) => r['activo'] == 1);
       if (busqueda != null && busqueda.isNotEmpty) {
@@ -301,7 +464,7 @@ class DatabaseHelper {
         filtered = filtered.where((r) => (r['stock_actual'] as int) <= (r['stock_minimo'] as int));
       }
 
-      final list = filtered.map((m) => Repuesto.fromMap(m)).toList();
+      final list = filtered.map((m) => Repuesto.fromMap(_prepareFromDb(m))).toList();
       list.sort((a, b) => a.nombre.compareTo(b.nombre));
       return list;
     }
@@ -324,33 +487,87 @@ class DatabaseHelper {
     }
 
     final maps = await db.query('inventario_repuestos', where: where.join(' AND '), whereArgs: args, orderBy: 'nombre ASC');
-    return maps.map((m) => Repuesto.fromMap(m)).toList();
+    return maps.map((m) => Repuesto.fromMap(_prepareFromDb(m))).toList();
+  }
+
+  Future<Repuesto?> getRepuesto(String id) async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('inventario_repuestos')
+            .select()
+            .eq('id', id)
+            .maybeSingle();
+        if (response != null) {
+          return Repuesto.fromMap(_prepareFromDb(response as Map<String, dynamic>));
+        }
+      } catch (e) {
+        debugPrint('Error fetching repuesto from Supabase: $e');
+      }
+    }
+
+    if (kIsWeb) {
+      final matches = _webRepuestos.where((r) => r['id'] == id);
+      if (matches.isEmpty) return null;
+      return Repuesto.fromMap(_prepareFromDb(matches.first));
+    }
+    final db = await database;
+    final maps = await db.query('inventario_repuestos', where: 'id = ?', whereArgs: [id]);
+    if (maps.isEmpty) return null;
+    return Repuesto.fromMap(_prepareFromDb(maps.first));
   }
 
   Future<Repuesto?> getRepuestoPorCodigo(String codigoInterno) async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('inventario_repuestos')
+            .select()
+            .eq('codigo_interno', codigoInterno)
+            .eq('activo', true)
+            .maybeSingle();
+        if (response != null) {
+          return Repuesto.fromMap(_prepareFromDb(response as Map<String, dynamic>));
+        }
+      } catch (e) {
+        debugPrint('Error fetching repuesto from Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final matches = _webRepuestos.where((r) =>
           (r['codigo_interno'] as String).toUpperCase() == codigoInterno.toUpperCase() &&
           r['activo'] == 1);
       if (matches.isEmpty) return null;
-      return Repuesto.fromMap(matches.first);
+      return Repuesto.fromMap(_prepareFromDb(matches.first));
     }
     final db = await database;
     final maps = await db.query('inventario_repuestos', where: 'codigo_interno = ? AND activo = 1', whereArgs: [codigoInterno], limit: 1);
     if (maps.isEmpty) return null;
-    return Repuesto.fromMap(maps.first);
+    return Repuesto.fromMap(_prepareFromDb(maps.first));
   }
 
   Future<void> updateRepuesto(Repuesto repuesto) async {
+    final map = repuesto.toMap();
+    if (_useCloud) {
+      try {
+        final cloudMap = _prepareToDb(map, forSupabase: true);
+        await SupabaseService.client.from('inventario_repuestos').upsert(cloudMap);
+      } catch (e) {
+        debugPrint('Error updating repuesto to Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final idx = _webRepuestos.indexWhere((r) => r['id'] == repuesto.id);
       if (idx != -1) {
-        _webRepuestos[idx] = repuesto.toMap();
+        _webRepuestos[idx] = map;
       }
       return;
     }
     final db = await database;
-    await db.update('inventario_repuestos', repuesto.toMap(), where: 'id = ?', whereArgs: [repuesto.id]);
+    final localMap = _prepareToDb(map, forSupabase: false);
+    await db.update('inventario_repuestos', localMap, where: 'id = ?', whereArgs: [repuesto.id]);
   }
 
   Future<Repuesto?> ajustarStock({
@@ -359,17 +576,70 @@ class DatabaseHelper {
     String? motivo,
     String? ordenId,
   }) async {
+    if (_useCloud) {
+      try {
+        final repResult = await SupabaseService.client
+            .from('inventario_repuestos')
+            .select()
+            .eq('id', repuestoId)
+            .maybeSingle();
+        if (repResult == null) return null;
+
+        final rep = Repuesto.fromMap(_prepareFromDb(repResult as Map<String, dynamic>));
+        final nuevoStock = rep.stockActual + delta;
+        if (nuevoStock < 0) return null;
+
+        final updated = rep.copyWith(stockActual: nuevoStock);
+        final cloudMap = _prepareToDb(updated.toMap(), forSupabase: true);
+        await SupabaseService.client.from('inventario_repuestos').upsert(cloudMap);
+
+        final historial = HistorialStock(
+          repuestoId: repuestoId,
+          ordenId: ordenId,
+          tipoMovimiento: delta > 0 ? TipoMovimiento.entrada : TipoMovimiento.salida,
+          cantidad: delta.abs(),
+          stockAnterior: rep.stockActual,
+          stockPosterior: nuevoStock,
+          motivo: motivo ?? (delta > 0 ? 'Entrada de stock' : 'Salida de stock'),
+        );
+        
+        final hMap = historial.toMap();
+        if (motivo != null && motivo.contains('Ajuste')) {
+          hMap['tipo_movimiento'] = TipoMovimiento.ajuste.value;
+        }
+        
+        final cloudHMap = _prepareToDb(hMap, forSupabase: true);
+        await SupabaseService.client.from('historial_stock').insert(cloudHMap);
+
+        if (kIsWeb) {
+          final idx = _webRepuestos.indexWhere((r) => r['id'] == repuestoId);
+          if (idx != -1) {
+            _webRepuestos[idx] = updated.toMap();
+          }
+          _webHistorial.add(hMap);
+        } else {
+          final db = await database;
+          await db.update('inventario_repuestos', _prepareToDb(updated.toMap(), forSupabase: false), where: 'id = ?', whereArgs: [repuestoId]);
+          await db.insert('historial_stock', _prepareToDb(hMap, forSupabase: false));
+        }
+
+        return updated;
+      } catch (e) {
+        debugPrint('Error adjusting stock in Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final idx = _webRepuestos.indexWhere((r) => r['id'] == repuestoId);
       if (idx == -1) return null;
 
       final repMap = _webRepuestos[idx];
-      final repuesto = Repuesto.fromMap(repMap);
-      final nuevoStock = repuesto.stockActual + delta;
+      final rep = Repuesto.fromMap(_prepareFromDb(repMap));
+      final nuevoStock = rep.stockActual + delta;
 
       if (nuevoStock < 0) return null; // Evitar stock negativo
 
-      final updatedRepuesto = repuesto.copyWith(stockActual: nuevoStock);
+      final updatedRepuesto = rep.copyWith(stockActual: nuevoStock);
       _webRepuestos[idx] = updatedRepuesto.toMap();
 
       // Registrar historial de stock
@@ -378,7 +648,7 @@ class DatabaseHelper {
         ordenId: ordenId,
         tipoMovimiento: delta > 0 ? TipoMovimiento.entrada : TipoMovimiento.salida,
         cantidad: delta.abs(),
-        stockAnterior: repuesto.stockActual,
+        stockAnterior: rep.stockActual,
         stockPosterior: nuevoStock,
         motivo: motivo ?? (delta > 0 ? 'Entrada de stock' : 'Salida de stock'),
       );
@@ -397,12 +667,12 @@ class DatabaseHelper {
       final maps = await txn.query('inventario_repuestos', where: 'id = ?', whereArgs: [repuestoId]);
       if (maps.isEmpty) return null;
 
-      final rep = Repuesto.fromMap(maps.first);
+      final rep = Repuesto.fromMap(_prepareFromDb(maps.first));
       final nuevoStock = rep.stockActual + delta;
       if (nuevoStock < 0) return null;
 
       final updated = rep.copyWith(stockActual: nuevoStock);
-      await txn.update('inventario_repuestos', updated.toMap(), where: 'id = ?', whereArgs: [repuestoId]);
+      await txn.update('inventario_repuestos', _prepareToDb(updated.toMap(), forSupabase: false), where: 'id = ?', whereArgs: [repuestoId]);
 
       final historial = HistorialStock(
         repuestoId: repuestoId,
@@ -418,26 +688,53 @@ class DatabaseHelper {
       if (motivo != null && motivo.contains('Ajuste')) {
         hMap['tipo_movimiento'] = TipoMovimiento.ajuste.value;
       }
-      await txn.insert('historial_stock', hMap);
+      await txn.insert('historial_stock', _prepareToDb(hMap, forSupabase: false));
 
       return updated;
     });
   }
 
   Future<void> deleteRepuesto(String id) async {
+    final nowStr = DateTime.now().toIso8601String();
+    if (_useCloud) {
+      try {
+        await SupabaseService.client
+            .from('inventario_repuestos')
+            .update({'activo': false, 'updated_at': nowStr})
+            .eq('id', id);
+      } catch (e) {
+        debugPrint('Error deleting repuesto in Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final idx = _webRepuestos.indexWhere((r) => r['id'] == id);
       if (idx != -1) {
         _webRepuestos[idx]['activo'] = 0;
-        _webRepuestos[idx]['updated_at'] = DateTime.now().toIso8601String();
+        _webRepuestos[idx]['updated_at'] = nowStr;
       }
       return;
     }
     final db = await database;
-    await db.update('inventario_repuestos', {'activo': 0, 'updated_at': DateTime.now().toIso8601String()}, where: 'id = ?', whereArgs: [id]);
+    await db.update('inventario_repuestos', {'activo': 0, 'updated_at': nowStr}, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<int> contarStockBajo() async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('inventario_repuestos')
+            .select()
+            .eq('activo', true);
+        final list = (response as List)
+            .map((m) => Repuesto.fromMap(_prepareFromDb(m as Map<String, dynamic>)))
+            .toList();
+        return list.where((r) => r.stockActual <= r.stockMinimo).length;
+      } catch (e) {
+        debugPrint('Error counting low stock in Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       return _webRepuestos
           .where((r) => r['activo'] == 1 && (r['stock_actual'] as int) <= (r['stock_minimo'] as int))
@@ -449,17 +746,33 @@ class DatabaseHelper {
   }
 
   Future<List<HistorialStock>> getHistorial(String repuestoId) async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('historial_stock')
+            .select()
+            .eq('repuesto_id', repuestoId)
+            .order('created_at', ascending: false)
+            .limit(50);
+        return (response as List)
+            .map((m) => HistorialStock.fromMap(_prepareFromDb(m as Map<String, dynamic>)))
+            .toList();
+      } catch (e) {
+        debugPrint('Error fetching stock history from Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final matches = _webHistorial
           .where((h) => h['repuesto_id'] == repuestoId)
-          .map((m) => HistorialStock.fromMap(m))
+          .map((m) => HistorialStock.fromMap(_prepareFromDb(m)))
           .toList();
       matches.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return matches.take(50).toList();
     }
     final db = await database;
     final maps = await db.query('historial_stock', where: 'repuesto_id = ?', whereArgs: [repuestoId], orderBy: 'created_at DESC', limit: 50);
-    return maps.map((m) => HistorialStock.fromMap(m)).toList();
+    return maps.map((m) => HistorialStock.fromMap(_prepareFromDb(m))).toList();
   }
 
   // ──────────────────────────────────────────────
@@ -467,51 +780,105 @@ class DatabaseHelper {
   // ──────────────────────────────────────────────
 
   Future<void> insertOrden(OrdenMantenimiento orden) async {
+    final map = orden.toMap();
+    if (_useCloud) {
+      try {
+        final cloudMap = _prepareToDb(map, forSupabase: true);
+        await SupabaseService.client.from('ordenes_mantenimiento').upsert(cloudMap);
+      } catch (e) {
+        debugPrint('Error inserting orden to Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       _webOrdenes.removeWhere((o) => o['id'] == orden.id);
-      _webOrdenes.add(orden.toMap());
+      _webOrdenes.add(map);
       return;
     }
     final db = await database;
-    await db.insert('ordenes_mantenimiento', orden.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final localMap = _prepareToDb(map, forSupabase: false);
+    await db.insert('ordenes_mantenimiento', localMap, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<OrdenMantenimiento>> getOrdenesActivas() async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('ordenes_mantenimiento')
+            .select()
+            .neq('estado', 'ENTREGADA')
+            .neq('estado', 'CANCELADA');
+        final list = (response as List)
+            .map((m) => OrdenMantenimiento.fromMap(_prepareFromDb(m as Map<String, dynamic>)))
+            .toList();
+        list.sort((a, b) => b.fechaIngreso.compareTo(a.fechaIngreso));
+        return list;
+      } catch (e) {
+        debugPrint('Error fetching active orders from Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final actives = _webOrdenes
           .where((o) => o['estado'] != 'ENTREGADA' && o['estado'] != 'CANCELADA')
-          .map((m) => OrdenMantenimiento.fromMap(m))
+          .map((m) => OrdenMantenimiento.fromMap(_prepareFromDb(m)))
           .toList();
       actives.sort((a, b) => b.fechaIngreso.compareTo(a.fechaIngreso));
       return actives;
     }
     final db = await database;
     final maps = await db.query('ordenes_mantenimiento', where: "estado NOT IN ('ENTREGADA', 'CANCELADA')", orderBy: 'fecha_ingreso DESC');
-    return maps.map((m) => OrdenMantenimiento.fromMap(m)).toList();
+    return maps.map((m) => OrdenMantenimiento.fromMap(_prepareFromDb(m))).toList();
   }
 
   Future<OrdenMantenimiento?> getOrden(String id) async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('ordenes_mantenimiento')
+            .select()
+            .eq('id', id)
+            .maybeSingle();
+        if (response != null) {
+          return OrdenMantenimiento.fromMap(_prepareFromDb(response as Map<String, dynamic>));
+        }
+      } catch (e) {
+        debugPrint('Error fetching orden from Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final matches = _webOrdenes.where((o) => o['id'] == id);
       if (matches.isEmpty) return null;
-      return OrdenMantenimiento.fromMap(matches.first);
+      return OrdenMantenimiento.fromMap(_prepareFromDb(matches.first));
     }
     final db = await database;
     final maps = await db.query('ordenes_mantenimiento', where: 'id = ?', whereArgs: [id]);
     if (maps.isEmpty) return null;
-    return OrdenMantenimiento.fromMap(maps.first);
+    return OrdenMantenimiento.fromMap(_prepareFromDb(maps.first));
   }
 
   Future<void> updateOrden(OrdenMantenimiento orden) async {
+    final map = orden.toMap();
+    if (_useCloud) {
+      try {
+        final cloudMap = _prepareToDb(map, forSupabase: true);
+        await SupabaseService.client.from('ordenes_mantenimiento').upsert(cloudMap);
+      } catch (e) {
+        debugPrint('Error updating orden in Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final idx = _webOrdenes.indexWhere((o) => o['id'] == orden.id);
       if (idx != -1) {
-        _webOrdenes[idx] = orden.toMap();
+        _webOrdenes[idx] = map;
       }
       return;
     }
     final db = await database;
-    await db.update('ordenes_mantenimiento', orden.toMap(), where: 'id = ?', whereArgs: [orden.id]);
+    final localMap = _prepareToDb(map, forSupabase: false);
+    await db.update('ordenes_mantenimiento', localMap, where: 'id = ?', whereArgs: [orden.id]);
   }
 
   Future<bool> agregarItemAOrden({
@@ -521,20 +888,111 @@ class DatabaseHelper {
     required double precioUnitario,
     required String descripcion,
   }) async {
+    if (_useCloud) {
+      try {
+        final repResult = await SupabaseService.client
+            .from('inventario_repuestos')
+            .select()
+            .eq('id', repuestoId)
+            .maybeSingle();
+        if (repResult == null) return false;
+
+        final rep = Repuesto.fromMap(_prepareFromDb(repResult as Map<String, dynamic>));
+        final nuevoStock = rep.stockActual - cantidad;
+        if (nuevoStock < 0) return false;
+
+        final updatedRep = rep.copyWith(stockActual: nuevoStock);
+        await SupabaseService.client
+            .from('inventario_repuestos')
+            .upsert(_prepareToDb(updatedRep.toMap(), forSupabase: true));
+
+        final historial = HistorialStock(
+          repuestoId: repuestoId,
+          ordenId: ordenId,
+          tipoMovimiento: TipoMovimiento.salida,
+          cantidad: cantidad,
+          stockAnterior: rep.stockActual,
+          stockPosterior: nuevoStock,
+          motivo: 'Consumido en Orden de Mantenimiento',
+        );
+        await SupabaseService.client
+            .from('historial_stock')
+            .insert(_prepareToDb(historial.toMap(), forSupabase: true));
+
+        final item = OrdenItem(
+          ordenId: ordenId,
+          repuestoId: repuestoId,
+          descripcion: descripcion,
+          cantidad: cantidad,
+          precioUnitario: precioUnitario,
+        );
+        await SupabaseService.client
+            .from('orden_items')
+            .insert(_prepareToDb(item.toMap(), forSupabase: true));
+
+        final itemsResult = await SupabaseService.client
+            .from('orden_items')
+            .select()
+            .eq('orden_id', ordenId);
+        double subtotalRepuestos = 0.0;
+        for (final m in itemsResult as List) {
+          subtotalRepuestos += (m['subtotal'] as num).toDouble();
+        }
+
+        final ordenResult = await SupabaseService.client
+            .from('ordenes_mantenimiento')
+            .select()
+            .eq('id', ordenId)
+            .maybeSingle();
+        if (ordenResult != null) {
+          final orden = OrdenMantenimiento.fromMap(_prepareFromDb(ordenResult as Map<String, dynamic>));
+          final updatedOrden = orden.copyWith(subtotalRepuestos: subtotalRepuestos);
+          await SupabaseService.client
+              .from('ordenes_mantenimiento')
+              .upsert(_prepareToDb(updatedOrden.toMap(), forSupabase: true));
+        }
+
+        if (kIsWeb) {
+          final rIdx = _webRepuestos.indexWhere((r) => r['id'] == repuestoId);
+          if (rIdx != -1) {
+            _webRepuestos[rIdx] = updatedRep.toMap();
+          }
+          _webHistorial.add(historial.toMap());
+          _webOrdenItems.add(item.toMap());
+          final oIdx = _webOrdenes.indexWhere((o) => o['id'] == ordenId);
+          if (oIdx != -1) {
+            final o = OrdenMantenimiento.fromMap(_prepareFromDb(_webOrdenes[oIdx]));
+            _webOrdenes[oIdx] = o.copyWith(subtotalRepuestos: subtotalRepuestos).toMap();
+          }
+        } else {
+          final db = await database;
+          await db.update('inventario_repuestos', _prepareToDb(updatedRep.toMap(), forSupabase: false), where: 'id = ?', whereArgs: [repuestoId]);
+          await db.insert('historial_stock', _prepareToDb(historial.toMap(), forSupabase: false));
+          await db.insert('orden_items', _prepareToDb(item.toMap(), forSupabase: false));
+          final oResult = await db.query('ordenes_mantenimiento', where: 'id = ?', whereArgs: [ordenId]);
+          if (oResult.isNotEmpty) {
+            final o = OrdenMantenimiento.fromMap(_prepareFromDb(oResult.first));
+            await db.update('ordenes_mantenimiento', _prepareToDb(o.copyWith(subtotalRepuestos: subtotalRepuestos).toMap(), forSupabase: false), where: 'id = ?', whereArgs: [ordenId]);
+          }
+        }
+
+        return true;
+      } catch (e) {
+        debugPrint('Error adding item to order in Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
-      // 1. Ajustar el stock en memoria
       final idx = _webRepuestos.indexWhere((r) => r['id'] == repuestoId);
       if (idx == -1) return false;
 
       final repMap = _webRepuestos[idx];
-      final rep = Repuesto.fromMap(repMap);
+      final rep = Repuesto.fromMap(_prepareFromDb(repMap));
       final nuevoStock = rep.stockActual - cantidad;
-      if (nuevoStock < 0) return false; // Stock insuficiente
+      if (nuevoStock < 0) return false;
 
-      // Actualizar stock del repuesto en memoria
       _webRepuestos[idx] = rep.copyWith(stockActual: nuevoStock).toMap();
 
-      // Registrar historial de stock
       final historial = HistorialStock(
         repuestoId: repuestoId,
         ordenId: ordenId,
@@ -546,7 +1004,6 @@ class DatabaseHelper {
       );
       _webHistorial.add(historial.toMap());
 
-      // 2. Insertar en items en memoria
       final item = OrdenItem(
         ordenId: ordenId,
         repuestoId: repuestoId,
@@ -556,14 +1013,13 @@ class DatabaseHelper {
       );
       _webOrdenItems.add(item.toMap());
 
-      // 3. Recalcular subtotales de la orden en memoria
       final subtotalRepuestos = _webOrdenItems
           .where((i) => i['orden_id'] == ordenId)
           .fold(0.0, (sum, i) => sum + (i['subtotal'] as num).toDouble());
 
       final oIdx = _webOrdenes.indexWhere((o) => o['id'] == ordenId);
       if (oIdx != -1) {
-        final orden = OrdenMantenimiento.fromMap(_webOrdenes[oIdx]);
+        final orden = OrdenMantenimiento.fromMap(_prepareFromDb(_webOrdenes[oIdx]));
         _webOrdenes[oIdx] = orden.copyWith(subtotalRepuestos: subtotalRepuestos).toMap();
       }
 
@@ -575,11 +1031,11 @@ class DatabaseHelper {
       final repOption = await txn.query('inventario_repuestos', where: 'id = ?', whereArgs: [repuestoId]);
       if (repOption.isEmpty) return false;
 
-      final rep = Repuesto.fromMap(repOption.first);
+      final rep = Repuesto.fromMap(_prepareFromDb(repOption.first));
       final nuevoStock = rep.stockActual - cantidad;
       if (nuevoStock < 0) return false;
 
-      await txn.update('inventario_repuestos', rep.copyWith(stockActual: nuevoStock).toMap(), where: 'id = ?', whereArgs: [repuestoId]);
+      await txn.update('inventario_repuestos', _prepareToDb(rep.copyWith(stockActual: nuevoStock).toMap(), forSupabase: false), where: 'id = ?', whereArgs: [repuestoId]);
 
       final historial = HistorialStock(
         repuestoId: repuestoId,
@@ -590,7 +1046,7 @@ class DatabaseHelper {
         stockPosterior: nuevoStock,
         motivo: 'Consumido en Orden de Mantenimiento',
       );
-      await txn.insert('historial_stock', historial.toMap());
+      await txn.insert('historial_stock', _prepareToDb(historial.toMap(), forSupabase: false));
 
       final item = OrdenItem(
         ordenId: ordenId,
@@ -599,7 +1055,7 @@ class DatabaseHelper {
         cantidad: cantidad,
         precioUnitario: precioUnitario,
       );
-      await txn.insert('orden_items', item.toMap());
+      await txn.insert('orden_items', _prepareToDb(item.toMap(), forSupabase: false));
 
       final itemsQuery = await txn.query('orden_items', where: 'orden_id = ?', whereArgs: [ordenId]);
       double subtotalRepuestos = 0.0;
@@ -609,9 +1065,9 @@ class DatabaseHelper {
 
       final ordenQuery = await txn.query('ordenes_mantenimiento', where: 'id = ?', whereArgs: [ordenId]);
       if (ordenQuery.isNotEmpty) {
-        final orden = OrdenMantenimiento.fromMap(ordenQuery.first);
+        final orden = OrdenMantenimiento.fromMap(_prepareFromDb(ordenQuery.first));
         final updatedOrden = orden.copyWith(subtotalRepuestos: subtotalRepuestos);
-        await txn.update('ordenes_mantenimiento', updatedOrden.toMap(), where: 'id = ?', whereArgs: [ordenId]);
+        await txn.update('ordenes_mantenimiento', _prepareToDb(updatedOrden.toMap(), forSupabase: false), where: 'id = ?', whereArgs: [ordenId]);
       }
 
       return true;
@@ -619,22 +1075,77 @@ class DatabaseHelper {
   }
 
   Future<List<OrdenItem>> getItemsDeOrden(String ordenId) async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('orden_items')
+            .select()
+            .eq('orden_id', ordenId);
+        return (response as List)
+            .map((m) => OrdenItem.fromMap(_prepareFromDb(m as Map<String, dynamic>)))
+            .toList();
+      } catch (e) {
+        debugPrint('Error fetching order items from Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       return _webOrdenItems
           .where((i) => i['orden_id'] == ordenId)
-          .map((m) => OrdenItem.fromMap(m))
+          .map((m) => OrdenItem.fromMap(_prepareFromDb(m)))
           .toList();
     }
     final db = await database;
     final maps = await db.query('orden_items', where: 'orden_id = ?', whereArgs: [ordenId]);
-    return maps.map((m) => OrdenItem.fromMap(m)).toList();
+    return maps.map((m) => OrdenItem.fromMap(_prepareFromDb(m))).toList();
   }
 
   Future<void> agregarManoObraAOrden(String ordenId, double monto, String concepto) async {
+    if (_useCloud) {
+      try {
+        final response = await SupabaseService.client
+            .from('ordenes_mantenimiento')
+            .select()
+            .eq('id', ordenId)
+            .maybeSingle();
+        if (response != null) {
+          final orden = OrdenMantenimiento.fromMap(_prepareFromDb(response as Map<String, dynamic>));
+          final nuevoCosto = orden.costoManoObra + monto;
+          
+          String? diagActual = orden.diagnostico;
+          String nuevoConcepto = '- Mano de obra: $concepto (\$${monto.toStringAsFixed(2)})';
+          String diagActualizado = diagActual == null || diagActual.isEmpty
+              ? nuevoConcepto
+              : '$diagActual\n$nuevoConcepto';
+
+          final updated = orden.copyWith(
+            costoManoObra: nuevoCosto,
+            diagnostico: diagActualizado,
+          );
+          await SupabaseService.client
+              .from('ordenes_mantenimiento')
+              .upsert(_prepareToDb(updated.toMap(), forSupabase: true));
+
+          if (kIsWeb) {
+            final oIdx = _webOrdenes.indexWhere((o) => o['id'] == ordenId);
+            if (oIdx != -1) {
+              _webOrdenes[oIdx] = updated.toMap();
+            }
+          } else {
+            final db = await database;
+            await db.update('ordenes_mantenimiento', _prepareToDb(updated.toMap(), forSupabase: false), where: 'id = ?', whereArgs: [ordenId]);
+          }
+        }
+        return;
+      } catch (e) {
+        debugPrint('Error adding labor to order in Supabase: $e');
+      }
+    }
+
     if (kIsWeb) {
       final oIdx = _webOrdenes.indexWhere((o) => o['id'] == ordenId);
       if (oIdx != -1) {
-        final orden = OrdenMantenimiento.fromMap(_webOrdenes[oIdx]);
+        final orden = OrdenMantenimiento.fromMap(_prepareFromDb(_webOrdenes[oIdx]));
         final nuevoCosto = orden.costoManoObra + monto;
         
         String? diagActual = orden.diagnostico;
@@ -655,7 +1166,7 @@ class DatabaseHelper {
     await db.transaction((txn) async {
       final maps = await txn.query('ordenes_mantenimiento', where: 'id = ?', whereArgs: [ordenId]);
       if (maps.isNotEmpty) {
-        final orden = OrdenMantenimiento.fromMap(maps.first);
+        final orden = OrdenMantenimiento.fromMap(_prepareFromDb(maps.first));
         final nuevoCosto = orden.costoManoObra + monto;
         
         String? diagnosticoActual = orden.diagnostico;
@@ -668,7 +1179,7 @@ class DatabaseHelper {
           costoManoObra: nuevoCosto,
           diagnostico: diagnosticoActualizado,
         );
-        await txn.update('ordenes_mantenimiento', updated.toMap(), where: 'id = ?', whereArgs: [ordenId]);
+        await txn.update('ordenes_mantenimiento', _prepareToDb(updated.toMap(), forSupabase: false), where: 'id = ?', whereArgs: [ordenId]);
       }
     });
   }
