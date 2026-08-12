@@ -21,8 +21,9 @@ set -euo pipefail
 # ya tiene instaladas. Si cambia, el teléfono no aceptará la actualización.
 HUELLA_PRODUCCION="58174d3e0336f36d3878b28945566bd0c15c52f89520a89ff6d121edc48a9699"
 
-rojo()  { printf '\033[31m%s\033[0m\n' "$1"; }
-verde() { printf '\033[32m%s\033[0m\n' "$1"; }
+rojo()     { printf '\033[31m%s\033[0m\n' "$1"; }
+amarillo() { printf '\033[33m%s\033[0m\n' "$1"; }
+verde()    { printf '\033[32m%s\033[0m\n' "$1"; }
 paso()  { printf '\n\033[1m▸ %s\033[0m\n' "$1"; }
 
 fallar() { rojo "✗ $1"; exit 1; }
@@ -64,8 +65,20 @@ fi
 verde "✓ versión nueva: $NAME (código $CODE)"
 
 # ── 4. Compilar ─────────────────────────────────────────────────────────────
+# La clave de Gemini se inyecta al compilar; nunca vive en el código. Si no
+# está, la app compila igual y la función de identificar repuestos por foto se
+# desactiva sola con un mensaje claro.
+DEFINES=()
+if [ -n "${GEMINI_API_KEY:-}" ]; then
+  DEFINES+=("--dart-define=GEMINI_API_KEY=$GEMINI_API_KEY")
+  echo "  clave de Gemini: inyectada"
+else
+  amarillo "  GEMINI_API_KEY no esta definida: identificar por foto quedara desactivada."
+  echo "    Para incluirla:  GEMINI_API_KEY=... bash herramientas/entregar.sh"
+fi
+
 paso "Compilando APK de release"
-flutter build apk --release || fallar "La compilación falló."
+flutter build apk --release "${DEFINES[@]}" || fallar "La compilación falló."
 
 APK="build/app/outputs/flutter-apk/app-release.apk"
 DESTINO="../mecanix-v$NAME.apk"
