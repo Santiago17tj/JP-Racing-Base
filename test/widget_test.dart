@@ -11,7 +11,7 @@ import 'package:moto_taller_app/main.dart';
 
 void main() {
   testWidgets('App builds smoke test', (WidgetTester tester) async {
-    await tester.pumpWidget(const MotoTallerApp());
+    await tester.pumpWidget(MotoTallerApp());
 
     expect(find.byType(MaterialApp), findsOneWidget);
   });

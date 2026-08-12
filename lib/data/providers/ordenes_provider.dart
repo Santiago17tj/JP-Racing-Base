@@ -6,6 +6,8 @@ import '../models/orden_item.dart';
 import '../models/cliente.dart';
 import '../models/vehiculo.dart';
 import '../models/repuesto.dart';
+import '../models/registro_caja.dart';
+import '../models/abono.dart';
 
 /// Proveedor para manejar el estado de las órdenes de mantenimiento.
 class OrdenesProvider extends ChangeNotifier {
@@ -14,8 +16,37 @@ class OrdenesProvider extends ChangeNotifier {
   List<OrdenMantenimiento> _ordenesActivas = [];
   List<OrdenMantenimiento> get ordenesActivas => _ordenesActivas;
 
+  /// Órdenes ya entregadas o canceladas: el historial del taller.
+  /// Se carga por páginas para que un taller con años de trabajo no tenga que
+  /// descargar todo el archivo cada vez que abre la app.
+  static const int tamanoPaginaHistorial = 50;
+
+  List<OrdenMantenimiento> _historial = [];
+  List<OrdenMantenimiento> get historial => _historial;
+
+  bool _hayMasHistorial = true;
+  bool get hayMasHistorial => _hayMasHistorial;
+
+  bool _cargandoHistorial = false;
+  bool get cargandoHistorial => _cargandoHistorial;
+
   List<Cliente> _clientes = [];
   List<Cliente> get clientes => _clientes;
+
+  List<RegistroCaja> _movimientosCaja = [];
+  List<RegistroCaja> get movimientosCaja => _movimientosCaja;
+
+  // Índices en memoria para resolver el cliente y la moto de cada orden sin
+  // ir a la base de datos una vez por tarjeta.
+  Map<String, Cliente> _clientesPorId = {};
+  Map<String, Vehiculo> _vehiculosPorId = {};
+
+  Cliente? clienteDe(String clienteId) => _clientesPorId[clienteId];
+  Vehiculo? vehiculoDe(String vehiculoId) => _vehiculosPorId[vehiculoId];
+
+  /// Índices completos, para cálculos que recorren todas las órdenes.
+  Map<String, Cliente> get clientesPorId => Map.unmodifiable(_clientesPorId);
+  Map<String, Vehiculo> get vehiculosPorId => Map.unmodifiable(_vehiculosPorId);
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -28,11 +59,42 @@ class OrdenesProvider extends ChangeNotifier {
     try {
       _ordenesActivas = await _db.getOrdenesActivas();
       _clientes = await _db.getClientes();
+      _movimientosCaja = await _db.getRegistrosCaja();
+      _historial =
+          await _db.getHistorialOrdenes(limite: tamanoPaginaHistorial);
+      _hayMasHistorial = _historial.length == tamanoPaginaHistorial;
+
+      final vehiculos = await _db.getVehiculos();
+      _clientesPorId = {for (final c in _clientes) c.id: c};
+      _vehiculosPorId = {for (final v in vehiculos) v.id: v};
     } catch (e) {
       debugPrint('Error cargando órdenes: $e');
     }
 
     _isLoading = false;
+    notifyListeners();
+  }
+
+  /// Trae la siguiente página del historial y la agrega a la lista actual.
+  Future<void> cargarMasHistorial() async {
+    if (_cargandoHistorial || !_hayMasHistorial) return;
+    _cargandoHistorial = true;
+    notifyListeners();
+
+    try {
+      final pagina = await _db.getHistorialOrdenes(
+        limite: tamanoPaginaHistorial,
+        desplazamiento: _historial.length,
+      );
+      // Evita duplicados si algo cambió de estado entre una página y otra.
+      final conocidas = _historial.map((o) => o.id).toSet();
+      _historial.addAll(pagina.where((o) => !conocidas.contains(o.id)));
+      _hayMasHistorial = pagina.length == tamanoPaginaHistorial;
+    } catch (e) {
+      debugPrint('Error cargando más historial: $e');
+    }
+
+    _cargandoHistorial = false;
     notifyListeners();
   }
 
@@ -47,6 +109,12 @@ class OrdenesProvider extends ChangeNotifier {
     required String apellidoCliente,
     required String telefonoCliente,
     required String numeroDocumentoCliente,
+    TipoDocumento tipoDocumento = TipoDocumento.cc,
+    String? digitoVerificacion,
+    RegimenFiscal? regimenFiscal,
+    String? codigoMunicipioDane,
+    String? emailCliente,
+    String? direccionCliente,
     required String placaPatente,
     required String marca,
     required String modelo,
@@ -54,7 +122,9 @@ class OrdenesProvider extends ChangeNotifier {
     required int kilometrajeIngreso,
     required String descripcionProblema,
     required String mecanicoAsignado,
-    required TipoServicio tipoServicio,
+    required String tipoServicio,
+    List<String> fotosEstado = const [],
+    bool esCotizacion = false,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -64,9 +134,14 @@ class OrdenesProvider extends ChangeNotifier {
       final cliente = Cliente(
         nombre: nombreCliente,
         apellido: apellidoCliente,
-        tipoDocumento: TipoDocumento.dni,
+        tipoDocumento: tipoDocumento,
         numeroDocumento: numeroDocumentoCliente,
+        digitoVerificacion: digitoVerificacion ?? (tipoDocumento == TipoDocumento.nit ? Cliente.calcularDV(numeroDocumentoCliente) : null),
+        regimenFiscal: regimenFiscal ?? RegimenFiscal.noResponsable,
+        codigoMunicipioDane: codigoMunicipioDane ?? '68001',
         telefono: telefonoCliente,
+        email: emailCliente,
+        direccion: direccionCliente,
       );
       await _db.insertCliente(cliente);
 
@@ -92,6 +167,8 @@ class OrdenesProvider extends ChangeNotifier {
         descripcionProblema: descripcionProblema,
         mecanicoAsignado: mecanicoAsignado,
         estado: EstadoOrden.ingresada,
+        fotosEstado: fotosEstado,
+        esCotizacion: esCotizacion,
       );
       await _db.insertOrden(orden);
 
@@ -112,7 +189,9 @@ class OrdenesProvider extends ChangeNotifier {
     required int kilometrajeIngreso,
     required String descripcionProblema,
     required String mecanicoAsignado,
-    required TipoServicio tipoServicio,
+    required String tipoServicio,
+    List<String> fotosEstado = const [],
+    bool esCotizacion = false,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -128,6 +207,8 @@ class OrdenesProvider extends ChangeNotifier {
         descripcionProblema: descripcionProblema,
         mecanicoAsignado: mecanicoAsignado,
         estado: EstadoOrden.ingresada,
+        fotosEstado: fotosEstado,
+        esCotizacion: esCotizacion,
       );
       await _db.insertOrden(orden);
 
@@ -174,6 +255,36 @@ class OrdenesProvider extends ChangeNotifier {
       await cargarDatos();
     } catch (e) {
       debugPrint('Error agregando mano de obra: $e');
+    }
+  }
+
+  Future<void> actualizarOrdenCompleta(
+    String ordenId, {
+    String? clienteId,
+    String? vehiculoId,
+    String? mecanico,
+    String? tipoServicio,
+    int? kilometraje,
+    String? descripcion,
+    DateTime? fechaIngreso,
+  }) async {
+    try {
+      final orden = await _db.getOrden(ordenId);
+      if (orden != null) {
+        final updated = orden.copyWith(
+          clienteId: clienteId ?? orden.clienteId,
+          vehiculoId: vehiculoId ?? orden.vehiculoId,
+          mecanicoAsignado: mecanico ?? orden.mecanicoAsignado,
+          tipoServicio: tipoServicio ?? orden.tipoServicio,
+          kilometrajeIngreso: kilometraje ?? orden.kilometrajeIngreso,
+          descripcionProblema: descripcion ?? orden.descripcionProblema,
+          fechaIngreso: fechaIngreso ?? orden.fechaIngreso,
+        );
+        await _db.updateOrden(updated);
+        await cargarDatos();
+      }
+    } catch (e) {
+      debugPrint('Error al actualizar orden completa: $e');
     }
   }
 
@@ -227,6 +338,48 @@ class OrdenesProvider extends ChangeNotifier {
     return await _db.getItemsDeOrden(ordenId);
   }
 
+  /// Elimina un ítem de la orden (repuesto o mano de obra).
+  /// Restaura el stock si era un repuesto de inventario, y recalcula costoManoObra si era labor.
+  Future<bool> eliminarItemDeOrden({
+    required String itemId,
+    required String ordenId,
+  }) async {
+    try {
+      final exito = await _db.eliminarItemDeOrden(itemId: itemId, ordenId: ordenId);
+      if (exito) {
+        await cargarDatos();
+      }
+      return exito;
+    } catch (e) {
+      debugPrint('Error eliminando item de orden: $e');
+      return false;
+    }
+  }
+
+  /// Agrega un repuesto externo/fuera de inventario con nombre y precio personalizado.
+  Future<bool> agregarRepuestoExterno({
+    required String ordenId,
+    required String nombre,
+    required double precio,
+    required int cantidad,
+  }) async {
+    try {
+      final exito = await _db.agregarItemLibreAOrden(
+        ordenId: ordenId,
+        nombre: nombre,
+        precio: precio,
+        cantidad: cantidad,
+      );
+      if (exito) {
+        await cargarDatos();
+      }
+      return exito;
+    } catch (e) {
+      debugPrint('Error agregando repuesto externo: $e');
+      return false;
+    }
+  }
+
   /// Obtiene la lista de vehículos para un cliente específico.
   Future<List<Vehiculo>> obtenerVehiculosDeCliente(String clienteId) async {
     return await _db.getVehiculosPorCliente(clienteId);
@@ -241,4 +394,125 @@ class OrdenesProvider extends ChangeNotifier {
   Future<Vehiculo?> obtenerVehiculoDeOrden(String vehiculoId) async {
     return await _db.getVehiculo(vehiculoId);
   }
+
+  /// Edita un registro de caja existente.
+  Future<void> editarRegistroCaja(String id, double monto, String concepto, String tipo) async {
+    try {
+      await _db.editarRegistroCaja(id, monto, concepto, tipo);
+      await cargarDatos();
+    } catch (e) {
+      debugPrint('Error editando registro de caja: $e');
+    }
+  }
+
+  /// Registra un movimiento manual en la caja.
+  Future<void> registrarMovimientoManual(double monto, String concepto, String tipo) async {
+    try {
+      final reg = RegistroCaja(
+        monto: monto,
+        concepto: concepto,
+        tipo: tipo,
+        fecha: DateTime.now(),
+      );
+      await _db.insertRegistroCaja(reg);
+      await cargarDatos();
+    } catch (e) {
+      debugPrint('Error registrarMovimientoManual: $e');
+    }
+  }
+
+  /// Procesa una venta rápida de mostrador.
+  Future<void> procesarVentaRapida({
+    required Map<Repuesto, int> items,
+    required double totalVenta,
+    required double totalCosto,
+  }) async {
+    try {
+      // 1. Reducir inventario
+      for (final entry in items.entries) {
+        final repuesto = entry.key;
+        final cantidad = entry.value;
+        final updatedRepuesto = repuesto.copyWith(
+          stockActual: repuesto.stockActual - cantidad,
+        );
+        await _db.updateRepuesto(updatedRepuesto);
+      }
+
+      // 2. Registrar el ingreso en la caja
+      final concepto = 'Venta rápida de mostrador (${items.values.fold(0, (a, b) => a + b)} items)';
+      await registrarMovimientoManual(totalVenta, concepto, 'ingreso');
+      
+    } catch (e) {
+      debugPrint('Error procesando venta rápida: $e');
+      rethrow;
+    }
+  }
+
+  /// Obtiene los abonos registrados para una orden.
+  Future<List<Abono>> obtenerAbonosDeOrden(String ordenId) async {
+    return await _db.obtenerAbonosDeOrden(ordenId);
+  }
+
+  /// Registra un abono/anticipo para una orden de mantenimiento:
+  /// a) Crea la fila en orden_abonos
+  /// b) Recalcula monto_pagado, saldo_pendiente y estado_pago de la orden
+  /// c) Registra el ingreso automáticamente en la caja/contabilidad
+  /// d) Notifica a los escuchas y recarga los datos
+  Future<void> registrarAbono({
+    required String ordenId,
+    required double monto,
+    required String metodoPago,
+    String? notas,
+  }) async {
+    try {
+      final abono = Abono(
+        ordenId: ordenId,
+        monto: monto,
+        metodoPago: metodoPago,
+        fecha: DateTime.now(),
+        notas: notas,
+      );
+      await _db.insertarAbono(abono);
+
+      // Obtener orden actual para recalcular montos
+      final ordenes = await _db.getOrdenesActivas();
+      final idx = ordenes.indexWhere((o) => o.id == ordenId);
+      if (idx != -1) {
+        final orden = ordenes[idx];
+        final nuevoMontoPagado = orden.montoPagado + monto;
+        final nuevoSaldo = orden.totalEstimado - nuevoMontoPagado;
+        final saldoFinal = nuevoSaldo < 0 ? 0.0 : nuevoSaldo;
+        final nuevoEstadoPago = saldoFinal <= 0 ? 'pagado' : (nuevoMontoPagado > 0 ? 'parcial' : 'pendiente');
+
+        await _db.actualizarPagoOrden(
+          ordenId: ordenId,
+          montoPagado: nuevoMontoPagado,
+          saldoPendiente: saldoFinal,
+          estadoPago: nuevoEstadoPago,
+        );
+
+        // Registrar ingreso en caja contable
+        final concepto = 'Abono Orden #${orden.numeroOrden} (${metodoPago.toUpperCase()})';
+        await registrarMovimientoManual(monto, concepto, 'ingreso');
+      }
+
+      await cargarDatos();
+    } catch (e) {
+      debugPrint('Error registrando abono: $e');
+      rethrow;
+    }
+  }
+
+  /// Limpia los datos almacenados en la sesión actual
+  void limpiarDatos() {
+    _ordenesActivas.clear();
+    _clientes.clear();
+    _movimientosCaja.clear();
+    _historial.clear();
+    _hayMasHistorial = true;
+    _clientesPorId.clear();
+    _vehiculosPorId.clear();
+    notifyListeners();
+  }
 }
+

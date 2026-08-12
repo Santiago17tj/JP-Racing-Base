@@ -89,39 +89,84 @@ class InventarioProvider extends ChangeNotifier {
   // ── Acciones Rápidas de Stock ─────────────────
 
   /// Incrementa stock en 1 unidad (Quick Action +).
+  /// Actualiza en memoria de forma optimista antes de la llamada al DB.
   Future<bool> incrementarStock(String repuestoId) async {
+    // Actualización optimista: el número cambia en pantalla al instante
+    final idx = _repuestos.indexWhere((r) => r.id == repuestoId);
+    if (idx != -1) {
+      _repuestos[idx] = _repuestos[idx].copyWith(
+        stockActual: _repuestos[idx].stockActual + 1,
+      );
+      _totalStockBajo = _repuestos.where((r) => r.stockBajo).length;
+      notifyListeners();
+    }
+
     final result = await _db.ajustarStock(
       repuestoId: repuestoId,
       delta: 1,
       motivo: 'Incremento rápido +1',
     );
     if (result != null) {
-      await cargarRepuestos();
+      await cargarRepuestos(); // Confirmar con datos reales del DB
       return true;
+    }
+    // Revertir actualización optimista si el DB falló
+    if (idx != -1) {
+      _repuestos[idx] = _repuestos[idx].copyWith(
+        stockActual: (_repuestos[idx].stockActual - 1).clamp(0, 99999),
+      );
+      notifyListeners();
     }
     return false;
   }
 
   /// Decrementa stock en 1 unidad (Quick Action −).
+  /// Actualiza en memoria de forma optimista antes de la llamada al DB.
   Future<bool> decrementarStock(String repuestoId) async {
+    // Actualización optimista: el número cambia en pantalla al instante
+    final idx = _repuestos.indexWhere((r) => r.id == repuestoId);
+    if (idx != -1) {
+      final nuevoStock = (_repuestos[idx].stockActual - 1).clamp(0, 99999);
+      _repuestos[idx] = _repuestos[idx].copyWith(stockActual: nuevoStock);
+      _totalStockBajo = _repuestos.where((r) => r.stockBajo).length;
+      notifyListeners();
+    }
+
     final result = await _db.ajustarStock(
       repuestoId: repuestoId,
       delta: -1,
       motivo: 'Decremento rápido -1',
     );
     if (result != null) {
-      await cargarRepuestos();
+      await cargarRepuestos(); // Confirmar con datos reales del DB
       return true;
+    }
+    // Revertir actualización optimista si el DB falló
+    if (idx != -1) {
+      _repuestos[idx] = _repuestos[idx].copyWith(
+        stockActual: _repuestos[idx].stockActual + 1,
+      );
+      notifyListeners();
     }
     return false;
   }
 
-  /// Ajuste arbitrario de stock con motivo.
+  /// Ajuste arbitrario de stock con motivo (entrada o salida con cantidad libre).
+  /// Actualiza en memoria de forma optimista antes de la llamada al DB.
   Future<bool> ajustarStock({
     required String repuestoId,
     required int delta,
     String? motivo,
   }) async {
+    // Actualización optimista
+    final idx = _repuestos.indexWhere((r) => r.id == repuestoId);
+    if (idx != -1) {
+      final nuevoStock = (_repuestos[idx].stockActual + delta).clamp(0, 99999);
+      _repuestos[idx] = _repuestos[idx].copyWith(stockActual: nuevoStock);
+      _totalStockBajo = _repuestos.where((r) => r.stockBajo).length;
+      notifyListeners();
+    }
+
     final result = await _db.ajustarStock(
       repuestoId: repuestoId,
       delta: delta,
@@ -130,6 +175,13 @@ class InventarioProvider extends ChangeNotifier {
     if (result != null) {
       await cargarRepuestos();
       return true;
+    }
+    // Revertir si falló
+    if (idx != -1) {
+      _repuestos[idx] = _repuestos[idx].copyWith(
+        stockActual: (_repuestos[idx].stockActual - delta).clamp(0, 99999),
+      );
+      notifyListeners();
     }
     return false;
   }
@@ -140,6 +192,7 @@ class InventarioProvider extends ChangeNotifier {
   Future<void> agregarRepuesto(Repuesto repuesto) async {
     await _db.insertRepuesto(repuesto);
     await cargarRepuestos();
+    notifyListeners();
   }
 
   /// Crea un repuesto y opcionalmente sube una foto al storage.
@@ -226,4 +279,16 @@ class InventarioProvider extends ChangeNotifier {
 
   /// Repuestos sin stock.
   int get sinStock => _repuestos.where((r) => r.stockActual == 0).length;
+
+  /// Restablece el inventario a su estado inicial para evitar fugas de datos entre talleres.
+  void limpiarDatos() {
+    _repuestos = [];
+    _isLoading = false;
+    _busqueda = '';
+    _categoriaFiltro = null;
+    _soloStockBajo = false;
+    _totalStockBajo = 0;
+    _repuestoEscaneado = null;
+    notifyListeners();
+  }
 }

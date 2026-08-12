@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Keystore y secretos — NUNCA subir al repositorio.
+# El patrón con ** cubre android/key.properties y android/app/key.properties,
+# que es donde Gradle lo busca de verdad.
+**/key.properties
+*.jks
+*.keystore
+*.p12
+.env
+.env.*
+!.env.example

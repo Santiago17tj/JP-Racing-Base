@@ -67,7 +67,7 @@ class CategoryFilter extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppTheme.radiusSm),
           border: Border.all(
             color: isActive
-                ? AppTheme.warning.withOpacity(0.5)
+                ? AppTheme.warning.withValues(alpha: 0.5)
                 : AppTheme.surfaceBorder,
             width: 1,
           ),
@@ -94,7 +94,7 @@ class CategoryFilter extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                 decoration: BoxDecoration(
-                  color: AppTheme.warning.withOpacity(isActive ? 0.3 : 0.15),
+                  color: AppTheme.warning.withValues(alpha: isActive ? 0.3 : 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -102,7 +102,7 @@ class CategoryFilter extends StatelessWidget {
                   style: TextStyle(
                     color: isActive
                         ? AppTheme.warning
-                        : AppTheme.warning.withOpacity(0.7),
+                        : AppTheme.warning.withValues(alpha: 0.7),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -127,7 +127,7 @@ class CategoryFilter extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppTheme.radiusSm),
           border: Border.all(
             color: isSelected
-                ? AppTheme.primary.withOpacity(0.5)
+                ? AppTheme.primary.withValues(alpha: 0.5)
                 : AppTheme.surfaceBorder,
             width: 1,
           ),

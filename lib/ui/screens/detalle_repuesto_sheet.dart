@@ -1,9 +1,12 @@
+import 'package:moto_taller_app/core/utils/currency_formatter.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/repuesto.dart';
 import '../../data/models/historial_stock.dart';
 import '../../data/providers/inventario_provider.dart';
+import '../../data/providers/sesion_local_provider.dart';
 
 /// Modal deslizante que muestra el detalle y log de auditoría de un repuesto.
 class DetalleRepuestoSheet extends StatelessWidget {
@@ -37,7 +40,7 @@ class DetalleRepuestoSheet extends StatelessWidget {
                   const Divider(color: AppTheme.surfaceBorder, height: 24),
                   _buildGeneralInfo(),
                   const SizedBox(height: AppTheme.spacingMd),
-                  _buildPricesCard(),
+                  _buildPricesCard(context),
                   const SizedBox(height: AppTheme.spacingLg),
                   _buildStockHistoryHeader(),
                   const SizedBox(height: AppTheme.spacingSm),
@@ -71,7 +74,7 @@ class DetalleRepuestoSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                repuesto.categoria.icon + ' ' + repuesto.categoria.label.toUpperCase(),
+                '${repuesto.categoria.icon} ${repuesto.categoria.label.toUpperCase()}',
                 style: const TextStyle(
                   color: AppTheme.primaryLight,
                   fontSize: 11,
@@ -92,7 +95,8 @@ class DetalleRepuestoSheet extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppTheme.surfaceLight,
                       borderRadius: BorderRadius.circular(4),
@@ -130,7 +134,8 @@ class DetalleRepuestoSheet extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (repuesto.descripcion != null && repuesto.descripcion!.isNotEmpty) ...[
+        if (repuesto.descripcion != null &&
+            repuesto.descripcion!.isNotEmpty) ...[
           const Text(
             'DESCRIPCIÓN',
             style: TextStyle(
@@ -203,7 +208,8 @@ class DetalleRepuestoSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildPricesCard() {
+  Widget _buildPricesCard(BuildContext context) {
+    final verFinanzas = context.watch<SesionLocalProvider>().puedeVerFinanzas;
     return Container(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       decoration: BoxDecoration(
@@ -214,28 +220,32 @@ class DetalleRepuestoSheet extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'COSTO',
-                style: TextStyle(
-                  color: AppTheme.textTertiary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
+          // El costo de compra y el margen solo los ve el dueño.
+          if (!verFinanzas)
+            const SizedBox.shrink()
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'COSTO',
+                  style: TextStyle(
+                    color: AppTheme.textTertiary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '\$${repuesto.precioCosto.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+                const SizedBox(height: 2),
+                Text(
+                  CurrencyFormatter.format(repuesto.precioCosto),
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -249,7 +259,7 @@ class DetalleRepuestoSheet extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '\$${repuesto.precioVenta.toStringAsFixed(2)}',
+                CurrencyFormatter.format(repuesto.precioVenta),
                 style: const TextStyle(
                   color: AppTheme.primaryLight,
                   fontSize: 20,
@@ -258,33 +268,34 @@ class DetalleRepuestoSheet extends StatelessWidget {
               ),
             ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppTheme.successSurface,
-              borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  '+${repuesto.margenGanancia.toStringAsFixed(0)}%',
-                  style: const TextStyle(
-                    color: AppTheme.success,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
+          if (verFinanzas)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppTheme.successSurface,
+                borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    '+${repuesto.margenGanancia.toStringAsFixed(0)}%',
+                    style: const TextStyle(
+                      color: AppTheme.success,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const Text(
-                  'MARGEN',
-                  style: TextStyle(
-                    color: AppTheme.success,
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
+                  const Text(
+                    'MARGEN',
+                    style: TextStyle(
+                      color: AppTheme.success,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          )
+                ],
+              ),
+            )
         ],
       ),
     );
@@ -348,7 +359,7 @@ class DetalleRepuestoSheet extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(

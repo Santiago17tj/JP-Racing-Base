@@ -1,8 +1,8 @@
+import 'package:moto_taller_app/core/utils/currency_formatter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/models/repuesto.dart';
 import '../../data/providers/inventario_provider.dart';
 import 'agregar_repuesto_screen.dart';
 
@@ -73,12 +73,29 @@ class _CloudInventoryScreenState extends State<CloudInventoryScreen> {
                             Text(repuesto.nombre, style: const TextStyle(fontWeight: FontWeight.w700)),
                             const SizedBox(height: 4),
                             Text('Stock: ${repuesto.stockActual}', style: const TextStyle(color: AppTheme.textSecondary)),
-                            Text('Precio: \$${repuesto.precioVenta.toStringAsFixed(2)}', style: const TextStyle(color: AppTheme.textTertiary)),
+                            Text('Precio: ${CurrencyFormatter.format(repuesto.precioVenta)}', style: const TextStyle(color: AppTheme.textTertiary)),
                           ],
                         ),
                       ),
                       IconButton(
-                        onPressed: () => provider.eliminarRepuesto(repuesto.id),
+                        onPressed: () async {
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: const Text('Eliminar repuesto'),
+                              content: Text('¿Eliminar "${repuesto.nombre}"? Esta acción no se puede deshacer.'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (ok == true) provider.eliminarRepuesto(repuesto.id);
+                        },
                         icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
                       ),
                     ],

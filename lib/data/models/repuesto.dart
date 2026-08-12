@@ -9,6 +9,7 @@ const _uuid = Uuid();
 /// Usa UUID como identificador para compatibilidad offline-first.
 class Repuesto {
   final String id;
+  final String? tallerId;
   final String codigoInterno;
   final String nombre;
   final String? descripcion;
@@ -29,6 +30,7 @@ class Repuesto {
 
   Repuesto({
     String? id,
+    this.tallerId,
     required this.codigoInterno,
     required this.nombre,
     this.descripcion,
@@ -66,6 +68,7 @@ class Repuesto {
 
   /// Crea una copia del repuesto con campos modificados.
   Repuesto copyWith({
+    String? tallerId,
     String? codigoInterno,
     String? nombre,
     String? descripcion,
@@ -84,6 +87,7 @@ class Repuesto {
   }) {
     return Repuesto(
       id: id,
+      tallerId: tallerId ?? this.tallerId,
       codigoInterno: codigoInterno ?? this.codigoInterno,
       nombre: nombre ?? this.nombre,
       descripcion: descripcion ?? this.descripcion,
@@ -108,6 +112,7 @@ class Repuesto {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'taller_id': tallerId,
       'codigo_interno': codigoInterno,
       'nombre': nombre,
       'descripcion': descripcion,
@@ -132,6 +137,7 @@ class Repuesto {
   factory Repuesto.fromMap(Map<String, dynamic> map) {
     return Repuesto(
       id: map['id'] as String,
+      tallerId: map['taller_id'] as String?,
       codigoInterno: map['codigo_interno'] as String,
       nombre: map['nombre'] as String,
       descripcion: map['descripcion'] as String?,
@@ -140,13 +146,13 @@ class Repuesto {
       subcategoria: map['subcategoria'] as String?,
       marcaRepuesto: map['marca_repuesto'] as String?,
       numeroParte: map['numero_parte'] as String?,
-      stockActual: map['stock_actual'] as int,
-      stockMinimo: map['stock_minimo'] as int,
-      precioCosto: (map['precio_costo'] as num).toDouble(),
-      precioVenta: (map['precio_venta'] as num).toDouble(),
+      stockActual: (map['stock_actual'] as num?)?.toInt() ?? 0,
+      stockMinimo: (map['stock_minimo'] as num?)?.toInt() ?? 0,
+      precioCosto: (map['precio_costo'] as num?)?.toDouble() ?? 0.0,
+      precioVenta: (map['precio_venta'] as num?)?.toDouble() ?? 0.0,
       ubicacionAlmacen: map['ubicacion_almacen'] as String?,
       unidadMedida: map['unidad_medida'] as String? ?? 'unidad',
-      activo: (map['activo'] as int) == 1,
+      activo: map['activo'] == true || map['activo'] == 1,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
     );
@@ -155,6 +161,7 @@ class Repuesto {
   factory Repuesto.fromJson(Map<String, dynamic> json) {
     return Repuesto(
       id: json['id'] as String?,
+      tallerId: json['taller_id'] as String?,
       codigoInterno: json['codigo_interno'] as String? ?? '',
       nombre: json['nombre'] as String? ?? '',
       descripcion: json['descripcion'] as String?,

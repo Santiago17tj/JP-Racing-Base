@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../widgets/checklist_diagnostico_sheet.dart';
+import '../widgets/factura_preview_sheet.dart';
+import '../widgets/selector_repuestos_modal.dart';
+import 'editar_orden_screen.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/constants/enums.dart';
 import '../../data/models/orden_mantenimiento.dart';
 import '../../data/models/cliente.dart';
 import '../../data/models/vehiculo.dart';
 import '../../data/models/orden_item.dart';
-import '../../data/models/repuesto.dart';
+import '../../data/models/abono.dart';
 import '../../data/providers/ordenes_provider.dart';
 import '../../data/providers/inventario_provider.dart';
-import '../../core/services/factura_service.dart';
-import '../../core/services/pdf_factura_service.dart';
+import '../../data/providers/taller_provider.dart';
+import '../../core/utils/currency_formatter.dart';
+import '../../core/dominio/reglas_orden.dart';
+import '../../core/services/factus_service.dart';
+import '../../core/config/app_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Pantalla de detalle técnico y gestión de ítems para una orden de mantenimiento.
@@ -83,10 +90,75 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
       diagnostico: _diagnosticoCtrl.text.trim(),
       notasMecanico: _notasCtrl.text.trim(),
     );
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Notas del mecánico actualizadas')),
     );
     _cargarItems();
+  }
+
+  /// Abre WhatsApp con un mensaje ya redactado sobre el estado de la moto.
+  Future<void> _escribirPorWhatsapp() async {
+    final telefono = widget.cliente.telefono.replaceAll(RegExp(r'[^0-9]'), '');
+    if (telefono.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('El cliente no tiene un teléfono registrado.')),
+      );
+      return;
+    }
+
+    // Si no trae indicativo, se asume Colombia (57).
+    final numero = telefono.length <= 10 ? '57$telefono' : telefono;
+
+    final taller = context.read<TallerProvider>().taller;
+    final nombreTaller = (taller?.nombreTaller ?? '').trim().isNotEmpty
+        ? taller!.nombreTaller
+        : 'el taller';
+    final saldo = _ordenActual
+        .saldoPendienteConImpuesto(taller?.porcentajeImpuestoDefecto ?? 0.0);
+
+    final mensaje = StringBuffer()
+      ..write('Hola ${widget.cliente.nombre}, le escribimos de $nombreTaller ')
+      ..write('sobre su ${widget.vehiculo.marca} ${widget.vehiculo.modelo} ')
+      ..write('(placa ${widget.vehiculo.placaPatente}), ')
+      ..write('orden ${_ordenActual.numeroOrden}. ')
+      ..write('Estado actual: ${_ordenActual.estado.label}.');
+    if (saldo > 0) {
+      mensaje.write(' Saldo pendiente: ${CurrencyFormatter.format(saldo)}.');
+    }
+
+    final url = Uri.parse(
+        'https://wa.me/$numero?text=${Uri.encodeComponent(mensaje.toString())}');
+
+    try {
+      final abierto =
+          await launchUrl(url, mode: LaunchMode.externalApplication);
+      if (!abierto && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir WhatsApp.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo abrir WhatsApp: $e')),
+        );
+      }
+    }
+  }
+
+  /// Abre la hoja de inspección "¿Qué tiene la moto?" y vuelca el resultado
+  /// en el campo de diagnóstico técnico.
+  Future<void> _abrirChecklistDiagnostico() async {
+    HapticFeedback.selectionClick();
+    final resultado = await ChecklistDiagnosticoSheet.mostrar(
+      context,
+      _diagnosticoCtrl.text,
+    );
+    if (resultado == null || !mounted) return;
+    setState(() => _diagnosticoCtrl.text = resultado);
+    await _guardarNotasMecanico();
   }
 
   Future<void> _cambiarEstado(EstadoOrden? nuevoEstado) async {
@@ -146,7 +218,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                 Navigator.pop(context);
                 final provider = context.read<OrdenesProvider>();
                 await provider.agregarManoObra(
-                    _ordenActual.id, precio, concepto);
+                    _ordenActual.id, precio, 'Mano de obra: $concepto');
                 _cargarItems();
               },
               child: const Text('Agregar'),
@@ -171,7 +243,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
       isScrollControlled: true,
       backgroundColor: AppTheme.background,
       builder: (context) {
-        return _SelectorRepuestosModal(
+        return SelectorRepuestosModal(
           inventarioProvider: inventarioProvider,
           onRepuestoSelected: (repuesto, cantidad) async {
             final exito = await provider.agregarRepuestoAOrden(
@@ -194,12 +266,33 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
   @override
   Widget build(BuildContext context) {
     // Verificar si el estado es LISTA_PARA_ENTREGA para el botón de facturación
-    final esListo = _ordenActual.estado == EstadoOrden.listaParaEntrega;
+    // La factura se habilita cuando la moto está lista y sigue disponible
+    // después de entregada, para poder reimprimirla desde el historial.
+    final esListo = _ordenActual.estado == EstadoOrden.listaParaEntrega ||
+        _ordenActual.estado == EstadoOrden.entregada;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_ordenActual.numeroOrden),
+        title: const Text('Taller - Detalle de Orden'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.chat_rounded, color: AppTheme.success),
+            tooltip: 'Escribir al cliente por WhatsApp',
+            onPressed: _escribirPorWhatsapp,
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_document),
+            tooltip: 'Editar Orden',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) =>
+                        EditarOrdenScreen(ordenActual: _ordenActual)),
+              );
+              if (mounted) _cargarItems();
+            },
+          ),
           // Selector de Estado de la Orden
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -300,7 +393,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
             children: [
               _buildMinicell(
                   'KILOMETRAJE ING.', '${_ordenActual.kilometrajeIngreso} km'),
-              _buildMinicell('TIPO SERVICIO', _ordenActual.tipoServicio.label),
+              _buildMinicell('TIPO SERVICIO', _ordenActual.tipoServicio),
               _buildMinicell(
                   'MECÁNICO', _ordenActual.mecanicoAsignado ?? 'Sin asignar'),
             ],
@@ -376,11 +469,19 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
           const SizedBox(height: AppTheme.spacingMd),
           TextFormField(
             controller: _diagnosticoCtrl,
+            readOnly: true,
+            onTap: _abrirChecklistDiagnostico,
+            minLines: 2,
+            maxLines: 8,
+            style: const TextStyle(fontSize: 13, height: 1.35),
             decoration: const InputDecoration(
               labelText: 'Diagnóstico Técnico',
-              hintText: 'Describe el estado general y repuestos requeridos...',
+              hintText: 'Toca para revisar qué tiene la moto...',
+              prefixIcon: Icon(Icons.two_wheeler_rounded,
+                  color: AppTheme.primaryLight, size: 20),
+              suffixIcon: Icon(Icons.chevron_right_rounded,
+                  color: AppTheme.textTertiary),
             ),
-            maxLines: 2,
           ),
           const SizedBox(height: 12),
           TextFormField(
@@ -446,6 +547,12 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                     tooltip: 'Agregar Repuesto',
                     onPressed: _dialogoAgregarRepuesto,
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.add_business_rounded,
+                        size: 18, color: AppTheme.warning),
+                    tooltip: 'Repuesto Externo',
+                    onPressed: _dialogoRepuestoExterno,
+                  ),
                 ],
               )
             ],
@@ -485,7 +592,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                     ],
                   ),
                   Text(
-                    '\$${_ordenActual.costoManoObra.toStringAsFixed(2)}',
+                    CurrencyFormatter.format(_ordenActual.costoManoObra),
                     style: const TextStyle(
                         color: AppTheme.textPrimary,
                         fontSize: 13,
@@ -493,11 +600,46 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+              ..._items.where(ReglasOrden.esManoObra).map((item) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6.0, left: 16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '- ${item.descripcion.replaceAll('Mano de obra: ', '')}',
+                          style: const TextStyle(
+                              color: AppTheme.textSecondary, fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        CurrencyFormatter.format(item.precioUnitario),
+                        style: const TextStyle(
+                            color: AppTheme.textSecondary, fontSize: 12),
+                      ),
+                      const SizedBox(width: 4),
+                      InkWell(
+                        onTap: () => _confirmarEliminarItem(item),
+                        borderRadius: BorderRadius.circular(12),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(Icons.close_rounded,
+                              size: 16, color: AppTheme.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
               const Divider(color: AppTheme.surfaceBorder, height: 16),
             ],
 
-            // Repuestos
-            ..._items.map((item) {
+            // Repuestos (excluding mano de obra items)
+            ..._items.where((i) => !ReglasOrden.esManoObra(i)).map((item) {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8.0),
                 child: Row(
@@ -517,7 +659,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            'Cantidad: ${item.cantidad} x \$${item.precioUnitario.toStringAsFixed(2)}',
+                            'Cantidad: ${item.cantidad} x ${CurrencyFormatter.format(item.precioUnitario)}',
                             style: const TextStyle(
                                 color: AppTheme.textTertiary, fontSize: 11),
                           ),
@@ -525,11 +667,21 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                       ),
                     ),
                     Text(
-                      '\$${item.subtotal.toStringAsFixed(2)}',
+                      CurrencyFormatter.format(item.subtotal),
                       style: const TextStyle(
                           color: AppTheme.textPrimary,
                           fontSize: 13,
                           fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: () => _confirmarEliminarItem(item),
+                      borderRadius: BorderRadius.circular(12),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.close_rounded,
+                            size: 16, color: AppTheme.error),
+                      ),
                     ),
                   ],
                 ),
@@ -541,7 +693,239 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
     );
   }
 
+  /// Diálogo de confirmación antes de eliminar un ítem de la orden.
+  Future<void> _confirmarEliminarItem(OrdenItem item) async {
+    final esManoObra = ReglasOrden.esManoObra(item);
+    final descripcion = esManoObra
+        ? item.descripcion.replaceAll('Mano de obra: ', '')
+        : item.descripcion;
+
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever_rounded, color: AppTheme.error),
+            SizedBox(width: 8),
+            Text('Eliminar Ítem', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '¿Estás seguro de eliminar este ${esManoObra ? "concepto de mano de obra" : "repuesto"} de la orden?',
+              style:
+                  const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceLight,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      descripcion,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 12),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(
+                    CurrencyFormatter.format(
+                        esManoObra ? item.precioUnitario : item.subtotal),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.error,
+                        fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            if (!esManoObra && item.repuestoId != 'item-externo-generico')
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  '💡 El stock del repuesto será restaurado al inventario.',
+                  style: TextStyle(color: AppTheme.success, fontSize: 11),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar',
+                style: TextStyle(color: AppTheme.textTertiary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmado == true) {
+      final provider = context.read<OrdenesProvider>();
+      final exito = await provider.eliminarItemDeOrden(
+        itemId: item.id,
+        ordenId: _ordenActual.id,
+      );
+      if (exito) {
+        _cargarItems();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Eliminado: $descripcion'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al eliminar el ítem')),
+        );
+      }
+    }
+  }
+
+  /// Diálogo para agregar un repuesto externo (comprado afuera) con nombre y precio manual.
+  Future<void> _dialogoRepuestoExterno() async {
+    final nombreCtrl = TextEditingController();
+    final precioCtrl = TextEditingController();
+    final cantidadCtrl = TextEditingController(text: '1');
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppTheme.surface,
+          title: const Row(
+            children: [
+              Icon(Icons.add_business_rounded, color: AppTheme.warning),
+              SizedBox(width: 8),
+              Flexible(
+                child: Text('Repuesto Externo', style: TextStyle(fontSize: 16)),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Agrega un repuesto que no está en tu inventario (comprado afuera).',
+                style: TextStyle(color: AppTheme.textTertiary, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nombreCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre del Repuesto',
+                  hintText: 'Ej: Cadena 520 RK Racing',
+                  prefixIcon: Icon(Icons.label_rounded),
+                ),
+                textCapitalization: TextCapitalization.sentences,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: precioCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Precio Unitario (\$)',
+                  prefixIcon: Icon(Icons.attach_money_rounded),
+                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: cantidadCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Cantidad',
+                  prefixIcon: Icon(Icons.numbers_rounded),
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar',
+                  style: TextStyle(color: AppTheme.textTertiary)),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final nombre = nombreCtrl.text.trim();
+                final precio = double.tryParse(precioCtrl.text) ?? 0.0;
+                final cantidad = int.tryParse(cantidadCtrl.text) ?? 1;
+
+                if (nombre.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Ingresa un nombre para el repuesto')),
+                  );
+                  return;
+                }
+                if (precio <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Ingresa un precio válido mayor a 0')),
+                  );
+                  return;
+                }
+
+                Navigator.pop(context);
+                final provider = context.read<OrdenesProvider>();
+                final exito = await provider.agregarRepuestoExterno(
+                  ordenId: _ordenActual.id,
+                  nombre: nombre,
+                  precio: precio,
+                  cantidad: cantidad,
+                );
+                if (exito) {
+                  _cargarItems();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Repuesto externo añadido: $nombre'),
+                        backgroundColor: AppTheme.success,
+                      ),
+                    );
+                  }
+                }
+              },
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Agregar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Porcentaje de IVA configurado en Ajustes del Taller (0 si no aplica).
+  double get _porcentajeImpuesto =>
+      context.watch<TallerProvider>().taller?.porcentajeImpuestoDefecto ?? 0.0;
+
   Widget _buildTotalesCard(bool esListo) {
+    final porcentaje = _porcentajeImpuesto;
+    final impuesto = _ordenActual.impuestoManoObra(porcentaje);
     return Container(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       decoration: AppTheme.cardDecoration,
@@ -550,10 +934,13 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Subtotal Repuestos',
-                  style:
-                      TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-              Text('\$${_ordenActual.subtotalRepuestos.toStringAsFixed(2)}',
+              Text(
+                  porcentaje > 0
+                      ? 'Subtotal Repuestos (IVA incl.)'
+                      : 'Subtotal Repuestos',
+                  style: const TextStyle(
+                      color: AppTheme.textSecondary, fontSize: 13)),
+              Text(CurrencyFormatter.format(_ordenActual.subtotalRepuestos),
                   style: const TextStyle(
                       color: AppTheme.textPrimary, fontSize: 13)),
             ],
@@ -565,11 +952,25 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
               const Text('Subtotal Mano de Obra',
                   style:
                       TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-              Text('\$${_ordenActual.costoManoObra.toStringAsFixed(2)}',
+              Text(CurrencyFormatter.format(_ordenActual.costoManoObra),
                   style: const TextStyle(
                       color: AppTheme.textPrimary, fontSize: 13)),
             ],
           ),
+          if (impuesto > 0) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('IVA ${porcentaje.toStringAsFixed(1)}% (mano de obra)',
+                    style: const TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 13)),
+                Text(CurrencyFormatter.format(impuesto),
+                    style: const TextStyle(
+                        color: AppTheme.textPrimary, fontSize: 13)),
+              ],
+            ),
+          ],
           const Divider(color: AppTheme.surfaceBorder, height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -582,7 +983,8 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                     fontSize: 14),
               ),
               Text(
-                '\$${_ordenActual.totalEstimado.toStringAsFixed(2)}',
+                CurrencyFormatter.format(
+                    _ordenActual.totalConImpuesto(porcentaje)),
                 style: const TextStyle(
                     color: AppTheme.primaryLight,
                     fontWeight: FontWeight.w900,
@@ -590,6 +992,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
               ),
             ],
           ),
+          _buildEstadoPagoCard(),
           const SizedBox(height: 16),
 
           // Botón Prominente de Factura
@@ -599,11 +1002,30 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
               onPressed: esListo
                   ? () {
                       HapticFeedback.mediumImpact();
+                      if (AppConfig.facturacionElectronicaActiva) {
+                        FactusService.emitirFacturaElectronica(
+                          orden: _ordenActual,
+                          cliente: widget.cliente,
+                          vehiculo: widget.vehiculo,
+                          items: _items,
+                          taller: context.read<TallerProvider>().taller,
+                        ).then((res) {
+                          if (context.mounted && res['success'] == true) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'Factura electrónica emitida DIAN (CUFE: ${res['cufe']})'),
+                                backgroundColor: AppTheme.success,
+                              ),
+                            );
+                          }
+                        });
+                      }
                       showModalBottomSheet(
                         context: context,
                         isScrollControlled: true,
                         backgroundColor: AppTheme.background,
-                        builder: (context) => _FacturaPreviewSheet(
+                        builder: (context) => FacturaPreviewSheet(
                           orden: _ordenActual,
                           cliente: widget.cliente,
                           vehiculo: widget.vehiculo,
@@ -641,526 +1063,309 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
       ),
     );
   }
-}
 
-class _FacturaPreviewSheet extends StatelessWidget {
-  final OrdenMantenimiento orden;
-  final Cliente cliente;
-  final Vehiculo vehiculo;
-  final List<OrdenItem> items;
+  Widget _buildEstadoPagoCard() {
+    final porcentaje = _porcentajeImpuesto;
+    final totalConIva = _ordenActual.totalConImpuesto(porcentaje);
+    final saldoConIva = _ordenActual.saldoPendienteConImpuesto(porcentaje);
 
-  const _FacturaPreviewSheet({
-    required this.orden,
-    required this.cliente,
-    required this.vehiculo,
-    required this.items,
-  });
+    // El estado guardado no contempla el IVA; si aún queda saldo con impuesto
+    // incluido, la orden no puede mostrarse como pagada.
+    final estadoPago = saldoConIva > 0 && _ordenActual.estadoPago == 'pagado'
+        ? (_ordenActual.montoPagado > 0 ? 'parcial' : 'pendiente')
+        : _ordenActual.estadoPago;
+    Color estadoColor;
+    String estadoText;
 
-  @override
-  Widget build(BuildContext context) {
-    final subtotalRepuestos =
-        items.fold<double>(0.0, (sum, item) => sum + item.subtotal);
-    final total = orden.costoManoObra + subtotalRepuestos;
+    if (estadoPago == 'pagado') {
+      estadoColor = AppTheme.success;
+      estadoText = 'PAGADO';
+    } else if (estadoPago == 'parcial') {
+      estadoColor = AppTheme.warning;
+      estadoText = 'PAGO PARCIAL';
+    } else {
+      estadoColor = AppTheme.error;
+      estadoText = 'PENDIENTE DE PAGO';
+    }
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.9,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) {
-        return Container(
-          padding: const EdgeInsets.all(AppTheme.spacingMd),
-          decoration: const BoxDecoration(
-            color: AppTheme.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: ListView(
-            controller: scrollController,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.receipt_long_rounded,
-                      color: AppTheme.primaryLight),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Factura de servicio',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppTheme.spacingMd),
-              Container(
-                padding: const EdgeInsets.all(AppTheme.spacingLg),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF121826), Color(0xFF1B2335)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                  border: Border.all(color: AppTheme.surfaceBorder, width: 1.2),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primarySurface,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.asset(
-                              'Imagenes/ChatGPT Image 24 jun 2026, 01_34_18 p.m..png',
-                              width: 64,
-                              height: 64,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('MOTO TALLER',
-                                  style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.primaryLight)),
-                              const SizedBox(height: 4),
-                              Text('Servicio técnico y repuestos',
-                                  style: TextStyle(
-                                      color: AppTheme.textSecondary,
-                                      fontSize: 13)),
-                              const SizedBox(height: 6),
-                              Text('Factura de servicio',
-                                  style: TextStyle(
-                                      color: AppTheme.textPrimary,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700)),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryLight.withOpacity(0.16),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(orden.estado.label,
-                              style: const TextStyle(
-                                  color: AppTheme.primaryLight,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppTheme.spacingLg),
-                    Wrap(
-                      spacing: 16,
-                      runSpacing: 8,
-                      children: [
-                        _buildFacturaMeta('ORDEN', orden.numeroOrden),
-                        _buildFacturaMeta('FECHA', DateTime.now().toLocal().toString().split('.')[0]),
-                      ],
-                    ),
-                    const SizedBox(height: AppTheme.spacingMd),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceLight,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Cliente: ${cliente.nombreCompleto}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 4),
-                          Text('Vehículo: ${vehiculo.marca} ${vehiculo.modelo} - ${vehiculo.placaPatente}', style: TextStyle(color: AppTheme.textSecondary)),
-                          Text('Kilometraje: ${orden.kilometrajeIngreso} km', style: TextStyle(color: AppTheme.textSecondary)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppTheme.spacingMd),
-                    const Divider(color: AppTheme.surfaceBorder),
-                    ...items.map((item) => Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: AppTheme.surfaceLight.withOpacity(0.55),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(child: Text(item.descripcion, style: const TextStyle(fontSize: 13))),
-                              Text('${item.cantidad} x \$${item.precioUnitario.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        )),
-                    if (items.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Text('Sin items registrados', style: TextStyle(color: AppTheme.textTertiary)),
-                      ),
-                    const Divider(color: AppTheme.surfaceBorder),
-                    _buildFacturaTotalRow('Mano de obra', orden.costoManoObra),
-                    const SizedBox(height: 6),
-                    _buildFacturaTotalRow('Subtotal repuestos', subtotalRepuestos),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primarySurface,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('TOTAL', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.primaryLight)),
-                          Text('\$${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.primaryLight)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppTheme.spacingMd),
-              Column(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      final body = FacturaService.buildEmailBody(
-                        numeroOrden: orden.numeroOrden,
-                        cliente: cliente.nombreCompleto,
-                        vehiculo: '${vehiculo.marca} ${vehiculo.modelo}',
-                        total: total,
-                        items: items.map((item) => item.descripcion).toList(),
-                      );
-                      final mailtoLink = FacturaService.buildMailtoLink(
-                        to: 'taller@motoapp.com',
-                        subject: 'Factura ${orden.numeroOrden}',
-                        body: body,
-                      );
-                      final uri = Uri.parse(mailtoLink);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri);
-                      }
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Factura enviada por correo')),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.email_rounded),
-                    label: const Text('Enviar por correo'),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      try {
-                        final path = await PdfFacturaService.generarFacturaPdf(
-                          orden: orden,
-                          cliente: cliente,
-                          vehiculo: vehiculo,
-                          items: items,
-                        );
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Se preparó el PDF para descargar')),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                                content: Text('No se pudo generar el PDF: $e')),
-                          );
-                        }
-                      }
-                    },
-                    icon: const Icon(Icons.download_rounded),
-                    label: const Text('Descargar PDF'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildFacturaMeta(String label, String value) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppTheme.surfaceLight,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: estadoColor.withOpacity(0.5), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10, color: AppTheme.textTertiary, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
-          const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFacturaTotalRow(String label, double value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(color: AppTheme.textSecondary)),
-        Text('\$${value.toStringAsFixed(2)}', style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
-      ],
-    );
-  }
-}
-
-/// Selector modal para buscar y añadir repuestos a la orden de servicio.
-class _SelectorRepuestosModal extends StatefulWidget {
-  final InventarioProvider inventarioProvider;
-  final Future<bool> Function(Repuesto repuesto, int cantidad)
-      onRepuestoSelected;
-
-  const _SelectorRepuestosModal({
-    required this.inventarioProvider,
-    required this.onRepuestoSelected,
-  });
-
-  @override
-  State<_SelectorRepuestosModal> createState() =>
-      _SelectorRepuestosModalState();
-}
-
-class _SelectorRepuestosModalState extends State<_SelectorRepuestosModal> {
-  final _searchCtrl = TextEditingController();
-  final Map<String, int> _cantidades =
-      {}; // Guarda la cantidad digitada para cada repuesto
-  bool _procesando = false;
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        top: AppTheme.spacingMd,
-        left: AppTheme.spacingMd,
-        right: AppTheme.spacingMd,
-        bottom: MediaQuery.of(context).viewInsets.bottom + AppTheme.spacingMd,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Icon(Icons.add_shopping_cart_rounded,
-                  color: AppTheme.primaryLight, size: 20),
-              const SizedBox(width: 8),
               const Text(
-                'Agregar Repuesto al Servicio',
+                'ESTADO DE PAGO',
                 style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textSecondary,
+                  letterSpacing: 0.8,
+                ),
               ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.close_rounded,
-                    color: AppTheme.textTertiary),
-                onPressed: () => Navigator.pop(context),
-              )
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: estadoColor.withOpacity(0.16),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  estadoText,
+                  style: TextStyle(
+                    color: estadoColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: AppTheme.spacingSm),
-          TextField(
-            controller: _searchCtrl,
-            decoration: const InputDecoration(
-              hintText: 'Escribe código o nombre del repuesto...',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
-            onChanged: (text) {
-              setState(() {
-                widget.inventarioProvider.buscar(text);
-              });
-            },
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child:
+                    _buildMontoBox('Total', totalConIva, AppTheme.textPrimary),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildMontoBox(
+                    'Abonado', _ordenActual.montoPagado, AppTheme.success),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildMontoBox('Pendiente', saldoConIva, AppTheme.error),
+              ),
+            ],
           ),
-          const SizedBox(height: AppTheme.spacingMd),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 280),
-            child: widget.inventarioProvider.repuestos.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text('No hay repuestos activos en inventario',
-                          style: TextStyle(color: AppTheme.textTertiary)),
-                    ),
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: widget.inventarioProvider.repuestos.length,
-                    itemBuilder: (context, index) {
-                      final rep = widget.inventarioProvider.repuestos[index];
-                      final tieneStock = rep.stockActual > 0;
-                      final cantActual = _cantidades[rep.id] ?? 1;
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surface,
-                          borderRadius:
-                              BorderRadius.circular(AppTheme.radiusSm),
-                          border: Border.all(color: AppTheme.surfaceBorder),
-                        ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _mostrarDialogoAbono(),
+              icon: const Icon(Icons.payments_rounded, size: 18),
+              label: const Text('💵 Registrar Abono / Anticipo'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.primaryLight,
+                side: const BorderSide(color: AppTheme.primaryLight),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                ),
+              ),
+            ),
+          ),
+          FutureBuilder<List<Abono>>(
+            future: context
+                .read<OrdenesProvider>()
+                .obtenerAbonosDeOrden(_ordenActual.id),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              final abonos = snapshot.data!;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 10),
+                  const Divider(color: AppTheme.surfaceBorder, height: 12),
+                  const Text('Historial de Abonos:',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textSecondary)),
+                  const SizedBox(height: 4),
+                  ...abonos.map((a) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
                         child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    rep.nombre,
-                                    style: TextStyle(
-                                      color: tieneStock
-                                          ? AppTheme.textPrimary
-                                          : AppTheme.textTertiary,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    'SKU: ${rep.codigoInterno}  |  Stock: ${rep.stockActual}  |  Precio: \$${rep.precioVenta.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                        color: AppTheme.textTertiary,
-                                        fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (tieneStock) ...[
-                              // Controles de cantidad
-                              Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.remove,
-                                        size: 16,
-                                        color: AppTheme.textSecondary),
-                                    onPressed: cantActual > 1
-                                        ? () {
-                                            setState(() {
-                                              _cantidades[rep.id] =
-                                                  cantActual - 1;
-                                            });
-                                          }
-                                        : null,
-                                  ),
-                                  Text('$cantActual',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                  IconButton(
-                                    icon: const Icon(Icons.add,
-                                        size: 16,
-                                        color: AppTheme.textSecondary),
-                                    onPressed: cantActual < rep.stockActual
-                                        ? () {
-                                            setState(() {
-                                              _cantidades[rep.id] =
-                                                  cantActual + 1;
-                                            });
-                                          }
-                                        : null,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton(
-                                onPressed: _procesando
-                                    ? null
-                                    : () async {
-                                        setState(() => _procesando = true);
-                                        HapticFeedback.lightImpact();
-                                        final exito =
-                                            await widget.onRepuestoSelected(
-                                                rep, cantActual);
-                                        setState(() => _procesando = false);
-
-                                        if (exito && mounted) {
-                                          Navigator.pop(context);
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                                content: Text(
-                                                    'Añadido: ${rep.nombre}')),
-                                          );
-                                        } else if (mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            const SnackBar(
-                                                content: Text(
-                                                    'Error al agregar (Verifica stock)')),
-                                          );
-                                        }
-                                      },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.primary,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 8),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(6)),
-                                ),
-                                child: const Icon(Icons.add_rounded, size: 18),
-                              ),
-                            ] else
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                    color: AppTheme.errorSurface,
-                                    borderRadius: BorderRadius.circular(4)),
-                                child: const Text(
-                                  'SIN STOCK',
-                                  style: TextStyle(
-                                      color: AppTheme.error,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              )
+                            Text(
+                                '${a.fecha.day}/${a.fecha.month}/${a.fecha.year} (${a.metodoPago.toUpperCase()})',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppTheme.textTertiary)),
+                            Text('+ ${CurrencyFormatter.format(a.monto)}',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.success)),
                           ],
                         ),
-                      );
-                    },
-                  ),
+                      )),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: AppTheme.spacingMd),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMontoBox(String title, double value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 9, color: AppTheme.textTertiary)),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              CurrencyFormatter.format(value),
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.bold, color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _mostrarDialogoAbono() async {
+    final montoCtrl = TextEditingController();
+    final notasCtrl = TextEditingController();
+    String metodoSeleccionado = 'efectivo';
+    final porcentaje =
+        context.read<TallerProvider>().taller?.porcentajeImpuestoDefecto ?? 0.0;
+    final saldoConIva = _ordenActual.saldoPendienteConImpuesto(porcentaje);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppTheme.surface,
+          title: const Row(
+            children: [
+              Icon(Icons.payments_rounded, color: AppTheme.primaryLight),
+              SizedBox(width: 8),
+              Text('Registrar Abono', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Saldo pendiente: ${CurrencyFormatter.format(saldoConIva)}',
+                style: const TextStyle(
+                    color: AppTheme.warning,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: montoCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Monto del Abono (\$)',
+                  prefixIcon: Icon(Icons.attach_money_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: metodoSeleccionado,
+                dropdownColor: AppTheme.surface,
+                decoration: const InputDecoration(labelText: 'Método de Pago'),
+                items: const [
+                  DropdownMenuItem(value: 'efectivo', child: Text('Efectivo')),
+                  DropdownMenuItem(
+                      value: 'transferencia',
+                      child: Text('Transferencia Bancaria')),
+                  DropdownMenuItem(
+                      value: 'nequi', child: Text('Nequi / Daviplata')),
+                  DropdownMenuItem(
+                      value: 'tarjeta', child: Text('Tarjeta Débito/Crédito')),
+                ],
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => metodoSeleccionado = v);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notasCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Notas / Referencia (Opcional)',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar',
+                  style: TextStyle(color: AppTheme.textTertiary)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final monto = double.tryParse(montoCtrl.text.trim());
+                if (monto == null || monto <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Ingrese un monto válido mayor a 0')),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx);
+
+                try {
+                  final provider = context.read<OrdenesProvider>();
+                  await provider.registrarAbono(
+                    ordenId: _ordenActual.id,
+                    monto: monto,
+                    metodoPago: metodoSeleccionado,
+                    notas: notasCtrl.text.trim().isEmpty
+                        ? null
+                        : notasCtrl.text.trim(),
+                  );
+
+                  final ordenes = provider.ordenesActivas;
+                  final idx =
+                      ordenes.indexWhere((o) => o.id == _ordenActual.id);
+                  if (idx != -1) {
+                    setState(() {
+                      _ordenActual = ordenes[idx];
+                    });
+                  }
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                            'Abono de ${CurrencyFormatter.format(monto)} registrado con éxito.'),
+                        backgroundColor: AppTheme.success,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error registrando abono: $e')),
+                    );
+                  }
+                }
+              },
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+              child: const Text('Guardar Abono'),
+            ),
+          ],
+        ),
       ),
     );
   }

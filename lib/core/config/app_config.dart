@@ -8,5 +8,17 @@ class AppConfig {
 
   // ── App ─────────────────────────────────────────────────────────────────
   static const String appName = 'MotoTaller & Facturación';
-  static const String appVersion = '1.0.0';
+  static const String appVersion = '1.4.1';
+
+  // ── Facturación Electrónica (Factus DIAN Sandbox) ────────────────────────
+  /// Desactivada por defecto para no interferir con el flujo normal.
+  static const bool facturacionElectronicaActiva = false;
+  static const String factusApiUrl = 'https://api-sandbox.factus.com.co';
+
+  /// El token nunca debe quedar escrito en el código: se inyecta al compilar
+  /// con `flutter build apk --dart-define=FACTUS_TOKEN=...`. Así no viaja al
+  /// repositorio ni queda dentro del APK de quien no lo necesite.
+  static const String factusAccessToken =
+      String.fromEnvironment('FACTUS_TOKEN', defaultValue: '');
 }
+

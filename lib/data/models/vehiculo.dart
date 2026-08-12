@@ -5,6 +5,7 @@ const _uuid = Uuid();
 /// Modelo de datos para un Vehículo (Motocicleta).
 class Vehiculo {
   final String id;
+  final String? tallerId;
   final String clienteId;
   final String placaPatente;
   final String marca;
@@ -21,6 +22,7 @@ class Vehiculo {
 
   Vehiculo({
     String? id,
+    this.tallerId,
     required this.clienteId,
     required this.placaPatente,
     required this.marca,
@@ -41,6 +43,7 @@ class Vehiculo {
   String get descripcionCompleta => '$marca $modelo ($placaPatente)';
 
   Vehiculo copyWith({
+    String? tallerId,
     String? clienteId,
     String? placaPatente,
     String? marca,
@@ -55,6 +58,7 @@ class Vehiculo {
   }) {
     return Vehiculo(
       id: id,
+      tallerId: tallerId ?? this.tallerId,
       clienteId: clienteId ?? this.clienteId,
       placaPatente: placaPatente ?? this.placaPatente,
       marca: marca ?? this.marca,
@@ -74,6 +78,7 @@ class Vehiculo {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'taller_id': tallerId,
       'cliente_id': clienteId,
       'placa_patente': placaPatente,
       'marca': marca,
@@ -93,17 +98,18 @@ class Vehiculo {
   factory Vehiculo.fromMap(Map<String, dynamic> map) {
     return Vehiculo(
       id: map['id'] as String,
+      tallerId: map['taller_id'] as String?,
       clienteId: map['cliente_id'] as String,
       placaPatente: map['placa_patente'] as String,
       marca: map['marca'] as String,
       modelo: map['modelo'] as String,
-      anio: map['anio'] as int,
-      kilometrajeActual: map['kilometraje_actual'] as int,
+      anio: (map['anio'] as num?)?.toInt() ?? 0,
+      kilometrajeActual: (map['kilometraje_actual'] as num?)?.toInt() ?? 0,
       color: map['color'] as String?,
       numeroMotor: map['numero_motor'] as String?,
       numeroChasis: map['numero_chasis'] as String?,
       notas: map['notas'] as String?,
-      activo: (map['activo'] as int) == 1,
+      activo: map['activo'] == true || map['activo'] == 1,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
     );

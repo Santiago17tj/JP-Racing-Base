@@ -46,12 +46,12 @@ enum TipoMovimiento {
 
 /// Estados de la orden de mantenimiento (Flujo del taller).
 enum EstadoOrden {
-  ingresada('INGRESADA', 'Ingresada', 0xFF3B82F6),
-  enDiagnostico('EN_DIAGNOSTICO', 'En Diagnóstico', 0xFFF59E0B),
-  enReparacion('EN_REPARACION', 'En Reparación', 0xFF8B5CF6),
-  listaParaEntrega('LISTA_PARA_ENTREGA', 'Lista para Entrega', 0xFF10B981),
-  entregada('ENTREGADA', 'Entregada', 0xFF64748B),
-  cancelada('CANCELADA', 'Cancelada', 0xFFEF4444);
+  ingresada('Ingresada', 'Ingresada', 0xFF3B82F6),
+  enDiagnostico('En Diagnóstico', 'En Diagnóstico', 0xFFF59E0B),
+  enReparacion('En Reparación', 'En Reparación', 0xFF8B5CF6),
+  listaParaEntrega('Lista para Entrega', 'Lista para Entrega', 0xFF10B981),
+  entregada('Entregada', 'Entregada', 0xFF64748B),
+  cancelada('Cancelada', 'Cancelada', 0xFFEF4444);
 
   const EstadoOrden(this.value, this.label, this.colorValue);
   final String value;
@@ -59,30 +59,55 @@ enum EstadoOrden {
   final int colorValue;
 
   static EstadoOrden fromValue(String value) {
+    final valClean = value.trim().toLowerCase().replaceAll('_', '').replaceAll(' ', '');
+    if (valClean.contains('diag')) return EstadoOrden.enDiagnostico;
+    if (valClean.contains('repara')) return EstadoOrden.enReparacion;
+    if (valClean.contains('lista') || valClean.contains('entrega')) {
+      if (valClean == 'entregada') return EstadoOrden.entregada;
+      return EstadoOrden.listaParaEntrega;
+    }
+    if (valClean.contains('cancel')) return EstadoOrden.cancelada;
+    
     return EstadoOrden.values.firstWhere(
-      (e) => e.value == value,
+      (e) {
+        final eV = e.value.toLowerCase().replaceAll(' ', '').replaceAll('_', '');
+        final eL = e.label.toLowerCase().replaceAll(' ', '').replaceAll('_', '');
+        return eV == valClean || eL == valClean;
+      },
       orElse: () => EstadoOrden.ingresada,
     );
   }
 }
 
 /// Tipos de servicio para la orden.
-enum TipoServicio {
-  preventivo('MANTENIMIENTO_PREVENTIVO', 'Mantenimiento Preventivo'),
-  correctivo('MANTENIMIENTO_CORRECTIVO', 'Mantenimiento Correctivo'),
-  diagnostico('DIAGNOSTICO', 'Diagnóstico'),
-  reparacionMayor('REPARACION_MAYOR', 'Reparación Mayor'),
-  personalizacion('PERSONALIZACION', 'Personalización'),
-  garantia('GARANTIA', 'Garantía');
+class TiposServicio {
+  static const preventivo = 'Mantenimiento Preventivo';
+  static const correctivo = 'Mantenimiento Correctivo';
+  static const diagnostico = 'Diagnóstico Técnico';
+  static const reparacionMayor = 'Reparación Mayor';
+  static const personalizacion = 'Personalización';
+  static const garantia = 'Garantía';
+  static const otro = 'Otro (Escribir a mano)';
 
-  const TipoServicio(this.value, this.label);
-  final String value;
-  final String label;
+  static const List<String> valores = [
+    preventivo,
+    correctivo,
+    diagnostico,
+    reparacionMayor,
+    personalizacion,
+    garantia,
+    otro,
+  ];
 
-  static TipoServicio fromValue(String value) {
-    return TipoServicio.values.firstWhere(
-      (t) => t.value == value,
-      orElse: () => TipoServicio.preventivo,
-    );
+  static String fromValue(String value) {
+    if (value == 'MANTENIMIENTO_PREVENTIVO') return preventivo;
+    if (value == 'MANTENIMIENTO_CORRECTIVO') return correctivo;
+    if (value == 'DIAGNOSTICO') return diagnostico;
+    if (value == 'REPARACION_MAYOR') return reparacionMayor;
+    if (value == 'PERSONALIZACION') return personalizacion;
+    if (value == 'GARANTIA') return garantia;
+    
+    // Si ya es un texto personalizado o coincide con alguno de la lista
+    return value;
   }
 }

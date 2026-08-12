@@ -53,9 +53,9 @@ class HistorialStock {
       repuestoId: map['repuesto_id'] as String,
       ordenId: map['orden_id'] as String?,
       tipoMovimiento: TipoMovimiento.fromValue(map['tipo_movimiento'] as String),
-      cantidad: map['cantidad'] as int,
-      stockAnterior: map['stock_anterior'] as int,
-      stockPosterior: map['stock_posterior'] as int,
+      cantidad: (map['cantidad'] as num?)?.toInt() ?? 0,
+      stockAnterior: (map['stock_anterior'] as num?)?.toInt() ?? 0,
+      stockPosterior: (map['stock_posterior'] as num?)?.toInt() ?? 0,
       motivo: map['motivo'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
     );

@@ -47,9 +47,9 @@ class OrdenItem {
       ordenId: map['orden_id'] as String,
       repuestoId: map['repuesto_id'] as String,
       descripcion: map['descripcion'] as String,
-      cantidad: map['cantidad'] as int,
-      precioUnitario: (map['precio_unitario'] as num).toDouble(),
-      descuento: (map['descuento'] as num).toDouble(),
+      cantidad: (map['cantidad'] as num?)?.toInt() ?? 0,
+      precioUnitario: (map['precio_unitario'] as num?)?.toDouble() ?? 0.0,
+      descuento: (map['descuento'] as num?)?.toDouble() ?? 0.0,
       createdAt: DateTime.parse(map['created_at'] as String),
     );
   }

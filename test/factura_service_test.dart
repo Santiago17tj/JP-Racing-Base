@@ -15,7 +15,8 @@ void main() {
     expect(body, contains('OT-001'));
     expect(body, contains('Ana Pérez'));
     expect(body, contains('Yamaha R1'));
-    expect(body, contains('1250.50'));
+    // El monto se formatea con la convención colombiana: 1.250,50
+    expect(body, contains('1.250,50'));
   });
 
   test('buildInvoiceFileName genera un nombre seguro para el PDF', () {

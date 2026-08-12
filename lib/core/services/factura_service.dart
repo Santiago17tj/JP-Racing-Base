@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'package:moto_taller_app/core/utils/currency_formatter.dart';
 
 class FacturaService {
   static String buildEmailBody({
@@ -15,7 +15,7 @@ Factura de servicio
 Orden: $numeroOrden
 Cliente: $cliente
 Vehículo: $vehiculo
-Total: ${total.toStringAsFixed(2)}
+Total: ${CurrencyFormatter.format(total).replaceAll("\$", "")}
 
 Items:
 - $itemsText

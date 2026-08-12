@@ -1,207 +1,254 @@
--- ============================================================
--- MotoTaller App — Esquema de Base de Datos Sincronizado en Supabase
--- Ejecuta este script en: Supabase Dashboard → SQL Editor → New Query → Run
--- ============================================================
+-- ============================================================================
+--  Mecanix — esquema REAL de la nube
+--  Proyecto: snzqauzmtydcheryfwmd (JP Racing Base)
+--
+--  ⚠ Este archivo es un RETRATO de la base de producción, no su fuente de
+--    verdad. La fuente de verdad es la base. Durante meses este archivo
+--    describió un esquema que no existía y nadie lo notó: por ahí se colaron
+--    las columnas que la app enviaba y Postgres rechazaba, perdiendo datos en
+--    silencio.
+--
+--  La defensa real contra esa deriva es `test/contrato_esquema_nube_test.dart`,
+--  que compara lo que la app envía contra las columnas reales. Si tocas el
+--  esquema, actualiza el fixture de esa prueba, no solo este archivo.
+--
+--  Regenerar con:
+--    SELECT table_name, column_name, data_type, is_nullable, column_default,
+--           is_generated, generation_expression
+--    FROM information_schema.columns WHERE table_schema='public'
+--    ORDER BY table_name, ordinal_position;
+--
+--  Verificado el 11 de agosto de 2026.
+-- ============================================================================
 
--- ── 0. Limpieza (Opcional - Elimina tablas antiguas para recrear) ──
-DROP TABLE IF EXISTS historial_stock CASCADE;
-DROP TABLE IF EXISTS orden_items CASCADE;
-DROP TABLE IF EXISTS ordenes_mantenimiento CASCADE;
-DROP TABLE IF EXISTS inventario_repuestos CASCADE;
-DROP TABLE IF EXISTS vehiculos CASCADE;
-DROP TABLE IF EXISTS clientes CASCADE;
 
--- Habilitar extensión UUID
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- ── 1. CLIENTES ─────────────────────────────────────────────
-CREATE TABLE clientes (
-  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  nombre            TEXT NOT NULL,
-  apellido          TEXT NOT NULL,
-  tipo_documento    TEXT NOT NULL,
-  numero_documento  TEXT NOT NULL UNIQUE,
-  email             TEXT,
-  telefono          TEXT NOT NULL,
-  direccion         TEXT,
-  ciudad            TEXT,
-  notas             TEXT,
-  activo            BOOLEAN NOT NULL DEFAULT true,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- ── perfil_taller ───────────────────────────────────────────────────────────
+-- Un taller por cuenta. `id` es el `taller_id` que llevan las demás tablas y
+-- el eje de todas las políticas RLS.
+CREATE TABLE public.perfil_taller (
+  id                           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  usuario_administrador_id     uuid NOT NULL UNIQUE REFERENCES auth.users(id),
+  nombre_taller                text NOT NULL DEFAULT 'Mi Taller',
+  logo_url                     text,
+  telefono                     text,
+  direccion                    text,
+  ciudad                       text,
+  moneda                       text NOT NULL DEFAULT 'COP',
+  porcentaje_impuesto_defecto  numeric NOT NULL DEFAULT 0.00,
+  terminos_condiciones_factura text,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_at                   timestamptz NOT NULL DEFAULT now()
 );
 
--- ── 2. VEHÍCULOS ────────────────────────────────────────────
-CREATE TABLE vehiculos (
-  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  cliente_id          UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
-  placa_patente       TEXT NOT NULL UNIQUE,
-  marca               TEXT NOT NULL,
-  modelo              TEXT NOT NULL,
-  anio                INTEGER NOT NULL,
-  kilometraje_actual  INTEGER NOT NULL DEFAULT 0,
-  color               TEXT,
-  numero_motor        TEXT,
-  numero_chasis       TEXT,
-  notas               TEXT,
-  activo              BOOLEAN NOT NULL DEFAULT true,
-  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+-- ── clientes ────────────────────────────────────────────────────────────────
+-- Los tres últimos campos son de facturación DIAN. Se añadieron al modelo de
+-- la app antes que a la nube: desde el 30/07/2026 hasta el 11/08/2026 ningún
+-- cliente nuevo llegó a sincronizar, porque PostgREST rechazaba la fila entera
+-- por columna inexistente y el error moría en un `catch`.
+CREATE TABLE public.clientes (
+  id                    uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  taller_id             uuid REFERENCES public.perfil_taller(id),
+  nombre                text NOT NULL,
+  apellido              text,
+  tipo_documento        text DEFAULT 'DNI',
+  numero_documento      text,
+  digito_verificacion   text,
+  regimen_fiscal        text,
+  codigo_municipio_dane text,
+  telefono              text,
+  email                 text,
+  direccion             text,
+  ciudad                text,
+  notas                 text,
+  activo                boolean NOT NULL DEFAULT true,
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  updated_at            timestamptz NOT NULL DEFAULT now()
 );
 
--- ── 3. INVENTARIO DE REPUESTOS ──────────────────────────────
-CREATE TABLE inventario_repuestos (
-  id                 UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  codigo_interno     TEXT NOT NULL UNIQUE,
-  nombre             TEXT NOT NULL,
-  descripcion        TEXT,
-  foto_url           TEXT,
-  categoria          TEXT NOT NULL DEFAULT 'OTROS',
-  subcategoria       TEXT,
-  marca_repuesto     TEXT,
-  numero_parte       TEXT,
-  stock_actual       INTEGER NOT NULL DEFAULT 0 CHECK(stock_actual >= 0),
-  stock_minimo       INTEGER NOT NULL DEFAULT 5 CHECK(stock_minimo >= 0),
-  precio_costo       NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK(precio_costo >= 0),
-  precio_venta       NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK(precio_venta >= 0),
-  ubicacion_almacen  TEXT,
-  unidad_medida      TEXT DEFAULT 'unidad',
-  activo             BOOLEAN NOT NULL DEFAULT true,
-  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+-- ── vehiculos ───────────────────────────────────────────────────────────────
+-- Tiene los nombres viejos y los nuevos a la vez: `placa`/`placa_patente` y
+-- `kilometraje`/`kilometraje_actual`. La app escribe el nombre nuevo y
+-- `_prepareToDb` copia al viejo, que es el NOT NULL.
+CREATE TABLE public.vehiculos (
+  id                 uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  taller_id          uuid REFERENCES public.perfil_taller(id),
+  cliente_id         uuid NOT NULL REFERENCES public.clientes(id),
+  placa              text NOT NULL,
+  placa_patente      text,
+  marca              text NOT NULL,
+  modelo             text NOT NULL,
+  anio               integer,
+  kilometraje        integer DEFAULT 0,
+  kilometraje_actual integer DEFAULT 0,
+  color              text,
+  numero_motor       text,
+  numero_chasis      text,
+  notas              text,
+  activo             boolean NOT NULL DEFAULT true,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  updated_at         timestamptz DEFAULT now()
 );
 
--- ── 4. ÓRDENES DE MANTENIMIENTO ─────────────────────────────
-CREATE TABLE ordenes_mantenimiento (
-  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  numero_orden          TEXT NOT NULL UNIQUE,
-  cliente_id            UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
-  vehiculo_id           UUID NOT NULL REFERENCES vehiculos(id) ON DELETE CASCADE,
-  estado                TEXT NOT NULL DEFAULT 'INGRESADA',
-  tipo_servicio         TEXT NOT NULL,
-  kilometraje_ingreso   INTEGER NOT NULL DEFAULT 0,
-  descripcion_problema  TEXT,
-  diagnostico           TEXT,
-  notas_mecanico        TEXT,
-  mecanico_asignado     TEXT,
-  costo_mano_obra       NUMERIC(12,2) NOT NULL DEFAULT 0,
-  subtotal_repuestos    NUMERIC(12,2) NOT NULL DEFAULT 0,
-  total_estimado        NUMERIC(12,2) NOT NULL DEFAULT 0,
-  fecha_ingreso         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  fecha_promesa         TIMESTAMPTZ,
-  fecha_entrega         TIMESTAMPTZ,
-  activo                BOOLEAN NOT NULL DEFAULT true,
-  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+-- ── inventario_repuestos ────────────────────────────────────────────────────
+-- Contiene además los dos repuestos ficticios del sistema:
+--   00000000-0000-4000-8000-000000000001  mano de obra
+--   00000000-0000-4000-8000-000000000002  repuesto externo
+-- Existen porque `orden_items.repuesto_id` es UUID con llave foránea: sin ellos
+-- no se puede registrar un concepto de mano de obra.
+CREATE TABLE public.inventario_repuestos (
+  id                uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  taller_id         uuid REFERENCES public.perfil_taller(id),
+  codigo_interno    text NOT NULL,
+  nombre            text NOT NULL,
+  descripcion       text,
+  foto_url          text,
+  categoria         text NOT NULL DEFAULT 'OTROS',
+  subcategoria      text,
+  marca_repuesto    text,
+  numero_parte      text,
+  stock_actual      integer NOT NULL DEFAULT 0,
+  stock_minimo      integer NOT NULL DEFAULT 5,
+  precio_costo      numeric NOT NULL DEFAULT 0,
+  precio_venta      numeric NOT NULL DEFAULT 0,
+  ubicacion_almacen text,
+  unidad_medida     text DEFAULT 'unidad',
+  activo            boolean NOT NULL DEFAULT true,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now()
 );
 
--- ── 5. ÍTEMS DE ORDEN ───────────────────────────────────────
-CREATE TABLE orden_items (
-  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  orden_id         UUID NOT NULL REFERENCES ordenes_mantenimiento(id) ON DELETE CASCADE,
-  repuesto_id      UUID NOT NULL REFERENCES inventario_repuestos(id) ON DELETE CASCADE,
-  descripcion      TEXT NOT NULL,
-  cantidad         INTEGER NOT NULL DEFAULT 1,
-  precio_unitario  NUMERIC(12,2) NOT NULL DEFAULT 0,
-  descuento        NUMERIC(12,2) NOT NULL DEFAULT 0,
-  subtotal         NUMERIC(12,2) NOT NULL DEFAULT 0,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- Único POR TALLER, no global (corregido el 11/08/2026): antes dos talleres no
+-- podían usar el mismo código interno.
+CREATE UNIQUE INDEX repuestos_codigo_por_taller
+  ON public.inventario_repuestos (taller_id, codigo_interno);
+
+
+-- ── ordenes_mantenimiento ───────────────────────────────────────────────────
+-- `costo_mano_obra` es el valor real de la mano de obra. Los ítems de mano de
+-- obra en `orden_items` existen solo para el detalle de la factura: sumarlos a
+-- `subtotal_repuestos` la cobraría dos veces.
+CREATE TABLE public.ordenes_mantenimiento (
+  id                   uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  taller_id            uuid REFERENCES public.perfil_taller(id),
+  numero_orden         text,
+  cliente_id           uuid NOT NULL REFERENCES public.clientes(id),
+  vehiculo_id          uuid NOT NULL REFERENCES public.vehiculos(id),
+  estado               text NOT NULL DEFAULT 'INGRESADA',
+  tipo_servicio        text DEFAULT 'Mantenimiento',
+  kilometraje_ingreso  integer DEFAULT 0,
+  descripcion_problema text,
+  diagnostico          text,
+  notas_mecanico       text,
+  mecanico_asignado    text,
+  fotos_estado         text,
+  costo_mano_obra      numeric NOT NULL DEFAULT 0,
+  subtotal_repuestos   numeric DEFAULT 0,
+  total_estimado       numeric DEFAULT 0,
+  monto_pagado         numeric NOT NULL DEFAULT 0,
+  saldo_pendiente      numeric NOT NULL DEFAULT 0,
+  estado_pago          text NOT NULL DEFAULT 'pendiente',
+  es_cotizacion        boolean DEFAULT false,
+  activo               boolean NOT NULL DEFAULT true,
+  fecha_ingreso        timestamptz NOT NULL DEFAULT now(),
+  fecha_promesa        timestamptz,
+  fecha_entrega        timestamptz,
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now()
 );
 
--- ── 6. HISTORIAL DE STOCK ───────────────────────────────────
-CREATE TABLE historial_stock (
-  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  repuesto_id      UUID NOT NULL REFERENCES inventario_repuestos(id) ON DELETE CASCADE,
-  orden_id         UUID REFERENCES ordenes_mantenimiento(id) ON DELETE SET NULL,
-  tipo_movimiento  TEXT NOT NULL,
-  cantidad         INTEGER NOT NULL,
-  stock_anterior   INTEGER NOT NULL,
-  stock_posterior  INTEGER NOT NULL,
-  motivo           TEXT,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- Único POR TALLER (corregido el 11/08/2026). Antes era global, y como la app
+-- calcula el folio por taller —la RLS solo le deja ver los suyos— dos talleres
+-- chocaban y la orden no se creaba.
+CREATE UNIQUE INDEX ordenes_numero_por_taller
+  ON public.ordenes_mantenimiento (taller_id, numero_orden);
+
+
+-- ── orden_items ─────────────────────────────────────────────────────────────
+-- ⚠ `subtotal` es GENERATED ALWAYS: la app NO debe enviarla nunca.
+--   `_prepareToDb` la quita; `test/contrato_esquema_nube_test.dart` lo vigila.
+--   Desde el 11/08/2026 la expresión respeta el descuento, igual que
+--   `OrdenItem.subtotal` en la app; antes lo ignoraba y las dos cifras no
+--   coincidían.
+CREATE TABLE public.orden_items (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  orden_id        uuid NOT NULL REFERENCES public.ordenes_mantenimiento(id),
+  repuesto_id     uuid NOT NULL REFERENCES public.inventario_repuestos(id),
+  descripcion     text NOT NULL DEFAULT '',
+  cantidad        integer NOT NULL DEFAULT 1,
+  precio_unitario numeric NOT NULL DEFAULT 0,
+  descuento       numeric NOT NULL DEFAULT 0,
+  subtotal        numeric GENERATED ALWAYS AS
+                    (cantidad::numeric * precio_unitario
+                     * (1 - COALESCE(descuento, 0) / 100)) STORED,
+  created_at      timestamptz NOT NULL DEFAULT now()
 );
 
--- ============================================================
--- ÍNDICES para optimización de consultas
--- ============================================================
-CREATE INDEX IF NOT EXISTS idx_vehiculos_cliente     ON vehiculos(cliente_id);
-CREATE INDEX IF NOT EXISTS idx_ordenes_vehiculo      ON ordenes_mantenimiento(vehiculo_id);
-CREATE INDEX IF NOT EXISTS idx_ordenes_cliente       ON ordenes_mantenimiento(cliente_id);
-CREATE INDEX IF NOT EXISTS idx_ordenes_estado        ON ordenes_mantenimiento(estado);
-CREATE INDEX IF NOT EXISTS idx_orden_items_orden     ON orden_items(orden_id);
-CREATE INDEX IF NOT EXISTS idx_historial_repuesto    ON historial_stock(repuesto_id);
-CREATE INDEX IF NOT EXISTS idx_repuestos_categoria   ON inventario_repuestos(categoria);
-CREATE INDEX IF NOT EXISTS idx_repuestos_stock_bajo  ON inventario_repuestos(stock_actual, stock_minimo);
 
--- ============================================================
--- ROW LEVEL SECURITY (RLS)
--- ============================================================
-ALTER TABLE clientes               ENABLE ROW LEVEL SECURITY;
-ALTER TABLE vehiculos              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE inventario_repuestos   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ordenes_mantenimiento  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orden_items            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE historial_stock        ENABLE ROW LEVEL SECURITY;
+-- ── orden_abonos ────────────────────────────────────────────────────────────
+-- Creada el 11/08/2026. Antes no existía: la app llevaba meses intentando
+-- subir abonos a una tabla ausente, y cada error se perdía en un `catch`.
+CREATE TABLE public.orden_abonos (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  orden_id    uuid NOT NULL REFERENCES public.ordenes_mantenimiento(id) ON DELETE CASCADE,
+  monto       numeric NOT NULL DEFAULT 0,
+  metodo_pago text NOT NULL DEFAULT 'efectivo',
+  fecha       timestamptz NOT NULL DEFAULT now(),
+  notas       text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
 
--- Políticas: usuarios autenticados tienen acceso total a sus datos
-CREATE POLICY "Acceso autenticado - clientes"
-  ON clientes FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE INDEX idx_orden_abonos_orden ON public.orden_abonos(orden_id);
 
-CREATE POLICY "Acceso autenticado - vehiculos"
-  ON vehiculos FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Acceso autenticado - repuestos"
-  ON inventario_repuestos FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- ── historial_stock ─────────────────────────────────────────────────────────
+-- ⚠ Aquí las columnas se llaman `stock_antes` / `stock_despues`. La app usa
+--   `stock_anterior` / `stock_posterior` y traduce en `_prepareToDb`.
+CREATE TABLE public.historial_stock (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  repuesto_id     uuid NOT NULL REFERENCES public.inventario_repuestos(id),
+  orden_id        uuid REFERENCES public.ordenes_mantenimiento(id),
+  tipo_movimiento text NOT NULL,
+  cantidad        integer NOT NULL,
+  stock_antes     integer NOT NULL,
+  stock_despues   integer NOT NULL,
+  motivo          text,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
 
-CREATE POLICY "Acceso autenticado - ordenes"
-  ON ordenes_mantenimiento FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Acceso autenticado - orden_items"
-  ON orden_items FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- ── registro_caja ───────────────────────────────────────────────────────────
+CREATE TABLE public.registro_caja (
+  id            uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  taller_id     uuid REFERENCES public.perfil_taller(id),
+  tipo          text NOT NULL,
+  monto         numeric NOT NULL,
+  concepto      text NOT NULL,
+  referencia_id uuid,
+  fecha         timestamptz NOT NULL DEFAULT now()
+);
 
-CREATE POLICY "Acceso autenticado - historial"
-  ON historial_stock FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- ============================================================
--- TRIGGER: auto-actualizar updated_at
--- ============================================================
-CREATE OR REPLACE FUNCTION update_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_clientes_updated_at
-  BEFORE UPDATE ON clientes
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
-CREATE TRIGGER trg_vehiculos_updated_at
-  BEFORE UPDATE ON vehiculos
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
-CREATE TRIGGER trg_repuestos_updated_at
-  BEFORE UPDATE ON inventario_repuestos
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
-CREATE TRIGGER trg_ordenes_updated_at
-  BEFORE UPDATE ON ordenes_mantenimiento
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
--- ============================================================
--- DATOS SEMILLA DE PRUEBA (Para tener repuestos cargados al iniciar)
--- ============================================================
-INSERT INTO inventario_repuestos (id, codigo_interno, nombre, descripcion, categoria, marca_repuesto, numero_parte, stock_actual, stock_minimo, precio_costo, precio_venta, ubicacion_almacen, unidad_medida)
-VALUES
-  ('a1b2c3d4-e5f6-7890-abcd-ef1234567801', 'FRE-001', 'Pastillas de Freno Delanteras', 'Pastillas de freno sinterizadas para uso en calle y pista', 'FRENOS', 'Brembo', 'BP-SX200', 12, 5, 18.50, 32.00, 'Estante A-1', 'par'),
-  ('a1b2c3d4-e5f6-7890-abcd-ef1234567802', 'FRE-002', 'Disco de Freno Trasero 220mm', 'Disco de freno flotante de acero inoxidable', 'FRENOS', 'EBC', 'DF-220T', 3, 4, 45.00, 78.50, 'Estante A-2', 'unidad'),
-  ('a1b2c3d4-e5f6-7890-abcd-ef1234567803', 'MOT-001', 'Filtro de Aceite HF204', 'Filtro de aceite de alta calidad para motores 4T', 'FILTROS', 'HiFlo', 'HF204', 25, 10, 5.20, 12.00, 'Estante B-1', 'unidad'),
-  ('a1b2c3d4-e5f6-7890-abcd-ef1234567804', 'MOT-002', 'Bujía Iridium CR9EIX', 'Bujía de iridio para mejor rendimiento y durabilidad', 'MOTOR', 'NGK', 'CR9EIX', 8, 10, 9.80, 18.50, 'Estante B-2', 'unidad'),
-  ('a1b2c3d4-e5f6-7890-abcd-ef1234567805', 'ELE-001', 'Regulador de Voltaje SH847', 'Regulador/rectificador de voltaje universal', 'ELECTRICO', 'Shindengen', 'SH847AA', 2, 3, 32.00, 55.00, 'Estante C-1', 'unidad'),
-  ('a1b2c3d4-e5f6-7890-abcd-ef1234567806', 'LUB-001', 'Aceite Motor 10W-40 Full Synthetic', 'Aceite sintético de alto rendimiento para motocicletas 4T', 'LUBRICANTES', 'Motul', '7100-10W40', 30, 15, 12.50, 22.00, 'Estante D-1', 'litro'),
-  ('a1b2c3d4-e5f6-7890-abcd-ef1234567807', 'TRA-001', 'Kit de Arrastre 428H (14-42)', 'Kit completo: cadena DID 428H + piñón 14T + corona 42T', 'TRANSMISION', 'DID', 'KIT-428H-1442', 0, 3, 38.00, 65.00, 'Estante E-1', 'kit')
-ON CONFLICT (codigo_interno) DO NOTHING;
-
--- ✅ Script ejecutado correctamente
-SELECT 'Esquema de Base de Datos MotoTaller Sincronizado Exitosamente 🏍️' AS resultado;
+-- ============================================================================
+--  Seguridad a nivel de fila
+--
+--  Las 9 tablas tienen RLS activo con una política `FOR ALL`. El criterio es
+--  siempre el mismo: la fila pertenece a un taller cuyo administrador es el
+--  usuario de la sesión.
+--
+--    taller_id IN (SELECT id FROM perfil_taller
+--                  WHERE usuario_administrador_id = auth.uid())
+--
+--  `orden_items` y `orden_abonos` no tienen `taller_id`, así que llegan al
+--  taller a través de su orden.
+--
+--  ⚠ Ojo al comprobarlo: el SQL Editor del dashboard usa rol de servicio y se
+--    salta la RLS. El aislamiento se prueba desde la app, autenticado.
+--
+--  ⚠ Las llaves foráneas NO respetan RLS (Postgres las valida como dueño de la
+--    tabla). Un repuesto de otro taller sigue satisfaciendo la FK aunque el
+--    usuario no pueda verlo: por eso los dos repuestos ficticios funcionan
+--    aunque estén registrados bajo un solo taller.
+-- ============================================================================

@@ -1,4 +1,4 @@
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
@@ -28,15 +28,10 @@ class SupabaseService {
   }
 
   static Future<void> signInWithGoogle() async {
-    final googleSignIn = GoogleSignIn(scopes: ['email']);
-    final googleUser = await googleSignIn.signIn();
-    if (googleUser == null) return;
-
-    final googleAuth = await googleUser.authentication;
-    await client.auth.signInWithIdToken(
-      provider: OAuthProvider.google,
-      idToken: googleAuth.idToken!,
-      accessToken: googleAuth.accessToken,
+    if (!_initialized) return;
+    await client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: kIsWeb ? Uri.base.origin : 'io.supabase.mototaller://login-callback',
     );
   }
 
