@@ -79,6 +79,9 @@ class _AjustesTallerScreenState extends State<AjustesTallerScreen> {
   }
 
   Future<void> _seleccionarYSubirLogo() async {
+    // Se captura antes de cualquier `await`: si el mecánico sale de la pantalla
+    // mientras sube el logo, usar `context` después reventaría la app.
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -118,7 +121,7 @@ class _AjustesTallerScreenState extends State<AjustesTallerScreen> {
           _logoUrl = publicUrl;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(
             content: Text('Logotipo subido exitosamente'),
             backgroundColor: AppTheme.success,
@@ -130,7 +133,7 @@ class _AjustesTallerScreenState extends State<AjustesTallerScreen> {
           _logoUrl =
               'https://images.unsplash.com/photo-1599819811279-d5ad9cccf838?q=80&w=200&auto=format&fit=crop';
         });
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(
             content: Text('Logotipo simulado cargado (Modo local)'),
             backgroundColor: AppTheme.success,
@@ -139,16 +142,14 @@ class _AjustesTallerScreenState extends State<AjustesTallerScreen> {
       }
     } catch (e) {
       debugPrint('Error cargando logo: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Error al subir logotipo: $e'),
           backgroundColor: AppTheme.error,
         ),
       );
     } finally {
-      setState(() {
-        _subiendoLogo = false;
-      });
+      if (mounted) setState(() => _subiendoLogo = false);
     }
   }
 
@@ -357,17 +358,18 @@ class _AjustesTallerScreenState extends State<AjustesTallerScreen> {
       logoUrl: _logoUrl,
     );
 
+    final messenger = ScaffoldMessenger.of(context);
     final exito = await tallerProvider.actualizarTaller(tallerActualizado);
 
     if (exito) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Ajustes guardados correctamente'),
           backgroundColor: AppTheme.success,
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Error al guardar ajustes: ${tallerProvider.error}'),
           backgroundColor: AppTheme.error,

@@ -173,24 +173,34 @@ class SelectorRepuestosModalState extends State<SelectorRepuestosModal> {
                                 onPressed: _procesando
                                     ? null
                                     : () async {
+                                        // Se capturan antes del `await`: el
+                                        // modal puede cerrarse mientras se
+                                        // guarda, y entonces este `context` ya
+                                        // no sirve. El `mounted` de antes era
+                                        // del State, no de este builder: daba
+                                        // una falsa sensación de seguridad.
+                                        final navigator = Navigator.of(context);
+                                        final messenger =
+                                            ScaffoldMessenger.of(context);
+
                                         setState(() => _procesando = true);
                                         HapticFeedback.lightImpact();
                                         final exito =
                                             await widget.onRepuestoSelected(
                                                 rep, cantActual);
-                                        setState(() => _procesando = false);
+                                        if (mounted) {
+                                          setState(() => _procesando = false);
+                                        }
 
-                                        if (exito && mounted) {
-                                          Navigator.pop(context);
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
+                                        if (exito) {
+                                          navigator.pop();
+                                          messenger.showSnackBar(
                                             SnackBar(
                                                 content: Text(
                                                     'Añadido: ${rep.nombre}')),
                                           );
-                                        } else if (mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
+                                        } else {
+                                          messenger.showSnackBar(
                                             const SnackBar(
                                                 content: Text(
                                                     'Error al agregar (Verifica stock)')),

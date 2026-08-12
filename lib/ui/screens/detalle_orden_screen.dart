@@ -775,27 +775,29 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
       ),
     );
 
-    if (confirmado == true) {
-      final provider = context.read<OrdenesProvider>();
-      final exito = await provider.eliminarItemDeOrden(
-        itemId: item.id,
-        ordenId: _ordenActual.id,
+    if (confirmado != true) return;
+    // La pantalla pudo cerrarse mientras el diálogo estaba abierto.
+    if (!mounted) return;
+
+    final provider = context.read<OrdenesProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final exito = await provider.eliminarItemDeOrden(
+      itemId: item.id,
+      ordenId: _ordenActual.id,
+    );
+
+    if (exito) {
+      _cargarItems();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Eliminado: $descripcion'),
+          backgroundColor: AppTheme.success,
+        ),
       );
-      if (exito) {
-        _cargarItems();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Eliminado: $descripcion'),
-              backgroundColor: AppTheme.success,
-            ),
-          );
-        }
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al eliminar el ítem')),
-        );
-      }
+    } else {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Error al eliminar el ítem')),
+      );
     }
   }
 
@@ -890,8 +892,9 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                   return;
                 }
 
-                Navigator.pop(context);
+                final messenger = ScaffoldMessenger.of(context);
                 final provider = context.read<OrdenesProvider>();
+                Navigator.pop(context);
                 final exito = await provider.agregarRepuestoExterno(
                   ordenId: _ordenActual.id,
                   nombre: nombre,
@@ -900,14 +903,12 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                 );
                 if (exito) {
                   _cargarItems();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Repuesto externo añadido: $nombre'),
-                        backgroundColor: AppTheme.success,
-                      ),
-                    );
-                  }
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Repuesto externo añadido: $nombre'),
+                      backgroundColor: AppTheme.success,
+                    ),
+                  );
                 }
               },
               icon: const Icon(Icons.add_rounded),
@@ -1003,6 +1004,10 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                   ? () {
                       HapticFeedback.mediumImpact();
                       if (AppConfig.facturacionElectronicaActiva) {
+                        // El aviso se resuelve cuando la DIAN responde, que
+                        // puede ser mucho después: se captura el messenger
+                        // ahora, mientras la pantalla existe con seguridad.
+                        final messenger = ScaffoldMessenger.of(context);
                         FactusService.emitirFacturaElectronica(
                           orden: _ordenActual,
                           cliente: widget.cliente,
@@ -1010,8 +1015,8 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                           items: _items,
                           taller: context.read<TallerProvider>().taller,
                         ).then((res) {
-                          if (context.mounted && res['success'] == true) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                          if (res['success'] == true) {
+                            messenger.showSnackBar(
                               SnackBar(
                                 content: Text(
                                     'Factura electrónica emitida DIAN (CUFE: ${res['cufe']})'),
