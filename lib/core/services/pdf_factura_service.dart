@@ -43,6 +43,17 @@ class TotalesFactura {
   /// Lo que el cliente paga.
   final double total;
 
+  /// Lo que ya abonó.
+  final double montoPagado;
+
+  /// Lo que queda por cobrar, **con el IVA incluido**.
+  ///
+  /// No se lee de `orden.saldoPendiente`: ese campo se calcula sobre
+  /// `totalEstimado`, que es la suma sin impuesto. La factura llegó a mostrar
+  /// un saldo 47.500 pesos por debajo del real mientras la pantalla de la orden
+  /// mostraba el correcto.
+  final double saldoPendiente;
+
   const TotalesFactura({
     required this.repuestos,
     required this.manoObra,
@@ -50,6 +61,8 @@ class TotalesFactura {
     required this.impuesto,
     required this.subtotal,
     required this.total,
+    required this.montoPagado,
+    required this.saldoPendiente,
   });
 
   factory TotalesFactura.de({
@@ -60,16 +73,22 @@ class TotalesFactura {
     final repuestos = ReglasOrden.subtotalRepuestos(items);
     final manoObra = orden.costoManoObra;
     final porcentaje = taller?.porcentajeImpuestoDefecto ?? 0.0;
+    final total = ReglasOrden.total(
+      subtotalRepuestos: repuestos,
+      costoManoObra: manoObra,
+      porcentajeImpuesto: porcentaje,
+    );
     return TotalesFactura(
       repuestos: repuestos,
       manoObra: manoObra,
       porcentajeImpuesto: porcentaje,
       impuesto: ReglasOrden.impuesto(manoObra, porcentaje),
       subtotal: repuestos + manoObra,
-      total: ReglasOrden.total(
-        subtotalRepuestos: repuestos,
-        costoManoObra: manoObra,
-        porcentajeImpuesto: porcentaje,
+      total: total,
+      montoPagado: orden.montoPagado,
+      saldoPendiente: ReglasOrden.saldoPendiente(
+        total: total,
+        montoPagado: orden.montoPagado,
       ),
     );
   }
@@ -431,7 +450,13 @@ class PdfFacturaService {
                     children: [
                       pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text(item.descripcion,
+                          // Las pantallas guardan la mano de obra como
+                          // 'Mano de obra: <concepto>'. Sin quitar el prefijo,
+                          // la línea sale como «Mano de obra: Mano de obra».
+                          child: pw.Text(
+                              item.descripcion
+                                  .replaceAll('Mano de obra: ', '')
+                                  .trim(),
                               style: const pw.TextStyle(fontSize: 8))),
                       pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
@@ -606,7 +631,7 @@ class PdfFacturaService {
                                     color: PdfColors.green700,
                                     fontWeight: pw.FontWeight.bold)),
                             pw.Text(
-                                '$symbol${CurrencyFormatter.format(orden.montoPagado).replaceAll("\$", "")}',
+                                '$symbol${CurrencyFormatter.format(cifras.montoPagado).replaceAll("\$", "")}',
                                 style: const pw.TextStyle(
                                     fontSize: 8,
                                     color: PdfColors.green700,
@@ -620,15 +645,15 @@ class PdfFacturaService {
                             pw.Text('SALDO PENDIEN.:',
                                 style: pw.TextStyle(
                                     fontSize: 8,
-                                    color: orden.saldoPendiente > 0
+                                    color: cifras.saldoPendiente > 0
                                         ? PdfColors.red700
                                         : PdfColors.green700,
                                     fontWeight: pw.FontWeight.bold)),
                             pw.Text(
-                                '$symbol${CurrencyFormatter.format(orden.saldoPendiente).replaceAll("\$", "")}',
+                                '$symbol${CurrencyFormatter.format(cifras.saldoPendiente).replaceAll("\$", "")}',
                                 style: pw.TextStyle(
                                     fontSize: 8,
-                                    color: orden.saldoPendiente > 0
+                                    color: cifras.saldoPendiente > 0
                                         ? PdfColors.red700
                                         : PdfColors.green700,
                                     fontWeight: pw.FontWeight.bold)),

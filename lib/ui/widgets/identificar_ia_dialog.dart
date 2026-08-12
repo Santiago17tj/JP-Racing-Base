@@ -17,6 +17,16 @@ class IdentificarIaDialog extends StatefulWidget {
 }
 
 class _IdentificarIaDialogState extends State<IdentificarIaDialog> {
+  /// Clave de Gemini, inyectada al compilar. **Nunca escrita en el código.**
+  ///
+  /// Estuvo puesta en claro y llegó a un commit; GitHub la detectó y bloqueó el
+  /// push. Aquella clave hay que darla por comprometida y revocarla, aunque se
+  /// haya limpiado el historial.
+  ///
+  ///     flutter build apk --release --dart-define=GEMINI_API_KEY=...
+  ///
+  /// Si no se inyecta queda vacía y la función de identificar por foto se
+  /// desactiva sola, sin romper nada más.
   static const _geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
 
   final ImagePicker _picker = ImagePicker();
@@ -62,6 +72,17 @@ class _IdentificarIaDialogState extends State<IdentificarIaDialog> {
   }
 
   Future<void> _analyzeWithGemini(XFile image) async {
+    // Sin clave inyectada no se llama a la API: se explica en vez de fallar con
+    // un error de autenticación que no le dice nada al mecánico.
+    if (_geminiApiKey.trim().isEmpty) {
+      setState(() {
+        _analyzing = false;
+        _errorMessage = 'Identificar por foto no está disponible en esta '
+            'versión de la app.';
+      });
+      return;
+    }
+
     try {
       final model = GenerativeModel(
         model: 'gemini-2.5-flash',

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../core/dominio/reglas_orden.dart';
 import '../../core/constants/enums.dart';
 import '../database/database_helper.dart';
 import '../models/orden_mantenimiento.dart';
@@ -458,10 +459,18 @@ class OrdenesProvider extends ChangeNotifier {
   /// b) Recalcula monto_pagado, saldo_pendiente y estado_pago de la orden
   /// c) Registra el ingreso automáticamente en la caja/contabilidad
   /// d) Notifica a los escuchas y recarga los datos
+  /// Registra un abono y recalcula lo que queda por cobrar.
+  ///
+  /// [porcentajeImpuesto] es obligatorio a propósito: el saldo se calculaba
+  /// sobre `totalEstimado`, que es la suma **sin IVA**, así que quedaba por
+  /// debajo del real. En una orden con 250.000 de mano de obra al 19%, el
+  /// cliente veía 47.500 pesos menos de deuda. La pantalla de la orden mostraba
+  /// el saldo correcto y la factura el equivocado.
   Future<void> registrarAbono({
     required String ordenId,
     required double monto,
     required String metodoPago,
+    required double porcentajeImpuesto,
     String? notas,
   }) async {
     try {
@@ -480,8 +489,12 @@ class OrdenesProvider extends ChangeNotifier {
       if (idx != -1) {
         final orden = ordenes[idx];
         final nuevoMontoPagado = orden.montoPagado + monto;
-        final nuevoSaldo = orden.totalEstimado - nuevoMontoPagado;
-        final saldoFinal = nuevoSaldo < 0 ? 0.0 : nuevoSaldo;
+        // Por ReglasOrden y sobre el total CON impuesto, que es lo que el
+        // cliente paga de verdad.
+        final saldoFinal = ReglasOrden.saldoPendiente(
+          total: orden.totalConImpuesto(porcentajeImpuesto),
+          montoPagado: nuevoMontoPagado,
+        );
         final nuevoEstadoPago = saldoFinal <= 0 ? 'pagado' : (nuevoMontoPagado > 0 ? 'parcial' : 'pendiente');
 
         await _db.actualizarPagoOrden(

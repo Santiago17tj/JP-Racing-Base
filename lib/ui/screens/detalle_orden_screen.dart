@@ -1334,6 +1334,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                     ordenId: _ordenActual.id,
                     monto: monto,
                     metodoPago: metodoSeleccionado,
+                    porcentajeImpuesto: porcentaje,
                     notas: notasCtrl.text.trim().isEmpty
                         ? null
                         : notasCtrl.text.trim(),

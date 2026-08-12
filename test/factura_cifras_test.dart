@@ -16,6 +16,8 @@ import 'package:moto_taller_app/data/models/perfil_taller.dart';
 /// el completo. Ese error se descubre discutiendo con un cliente en el
 /// mostrador, que es el peor sitio posible.
 void main() {
+  _pruebasDeSaldo();
+
   OrdenItem repuesto({
     required double precio,
     double descuento = 0,
@@ -171,6 +173,97 @@ void main() {
       expect(t.repuestos, 0);
       expect(t.impuesto, closeTo(15200, 0.001));
       expect(t.total, closeTo(95200, 0.001));
+    });
+  });
+}
+
+/// El saldo pendiente que aparece en la factura.
+///
+/// Caso real, factura OT-00014 del 12/08/2026: repuestos 850.000, mano de obra
+/// 250.000, IVA 47.500, total 1.147.500, abonado 15.000. La factura imprimía
+/// **1.085.000** de saldo cuando lo correcto son 1.132.500. Exactamente el IVA
+/// de diferencia, en contra del taller.
+///
+/// La causa: se imprimía `orden.saldoPendiente`, un campo guardado que se
+/// calcula sobre `totalEstimado` — la suma SIN impuesto. La pantalla de la
+/// orden usaba `saldoPendienteConImpuesto` y mostraba el número correcto, así
+/// que la app y su propia factura decían cosas distintas.
+void _pruebasDeSaldo() {
+  TotalesFactura conAbono({
+    required List<OrdenItem> items,
+    required double costoManoObra,
+    required double montoPagado,
+    double porcentajeImpuesto = 0,
+  }) =>
+      TotalesFactura.de(
+        orden: OrdenMantenimiento(
+          numeroOrden: 'OT-00014',
+          clienteId: 'c1',
+          vehiculoId: 'v1',
+          tipoServicio: 'Mantenimiento Preventivo',
+          kilometrajeIngreso: 42000,
+          costoManoObra: costoManoObra,
+          subtotalRepuestos: ReglasOrden.subtotalRepuestos(items),
+          montoPagado: montoPagado,
+        ),
+        items: items,
+        taller: PerfilTaller(
+          usuarioAdministradorId: 'u1',
+          nombreTaller: 'JP RACING',
+          porcentajeImpuestoDefecto: porcentajeImpuesto,
+        ),
+      );
+
+  OrdenItem rep(double precio) => OrdenItem(
+        ordenId: 'o1',
+        repuestoId: '9f8c1a2b-3d4e-4f5a-8b9c-0d1e2f3a4b5c',
+        descripcion: 'Repuesto',
+        cantidad: 1,
+        precioUnitario: precio,
+      );
+
+  group('el saldo pendiente incluye el IVA', () {
+    test('reproduce la factura OT-00014 con el número correcto', () {
+      final t = conAbono(
+        items: [rep(850000)],
+        costoManoObra: 250000,
+        montoPagado: 15000,
+        porcentajeImpuesto: 19,
+      );
+
+      expect(t.total, 1147500);
+      expect(t.saldoPendiente, 1132500,
+          reason: '1.085.000 sería el saldo sin contar el IVA: el taller '
+              'cobraría 47.500 pesos de menos.');
+    });
+
+    test('sin impuesto el saldo es total menos abonado', () {
+      final t = conAbono(
+        items: [rep(100000)],
+        costoManoObra: 50000,
+        montoPagado: 30000,
+      );
+      expect(t.saldoPendiente, 120000);
+    });
+
+    test('si ya pagó de más el saldo es cero, nunca negativo', () {
+      final t = conAbono(
+        items: [rep(50000)],
+        costoManoObra: 0,
+        montoPagado: 80000,
+      );
+      expect(t.saldoPendiente, 0);
+    });
+
+    test('sin abonos el saldo es el total completo', () {
+      final t = conAbono(
+        items: [rep(100000)],
+        costoManoObra: 100000,
+        montoPagado: 0,
+        porcentajeImpuesto: 19,
+      );
+      expect(t.saldoPendiente, t.total);
+      expect(t.saldoPendiente, 219000);
     });
   });
 }
