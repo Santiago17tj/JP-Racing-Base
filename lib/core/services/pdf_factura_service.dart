@@ -15,6 +15,66 @@ import 'package:moto_taller_app/data/models/perfil_taller.dart';
 import 'package:moto_taller_app/core/utils/currency_formatter.dart';
 import 'package:moto_taller_app/core/dominio/reglas_orden.dart';
 
+
+/// Las cifras que aparecen en el recuadro de totales de la factura.
+///
+/// Existe para que se puedan comprobar sin generar el PDF: el texto de un PDF
+/// se parte en segmentos y buscar «$89.000» dentro de los bytes no es fiable.
+///
+/// Todo pasa por [ReglasOrden]. Es donde se decide que el IVA solo grava la
+/// mano de obra y que los ítems de mano de obra no suman al subtotal de
+/// repuestos — sumarlos la cobraría dos veces.
+@immutable
+class TotalesFactura {
+  /// Suma de los repuestos, con sus descuentos ya aplicados.
+  final double repuestos;
+
+  /// Mano de obra. Vive en `orden.costoManoObra`, no en los ítems.
+  final double manoObra;
+
+  final double porcentajeImpuesto;
+
+  /// IVA, calculado **solo** sobre la mano de obra.
+  final double impuesto;
+
+  /// Repuestos + mano de obra, antes de impuesto.
+  final double subtotal;
+
+  /// Lo que el cliente paga.
+  final double total;
+
+  const TotalesFactura({
+    required this.repuestos,
+    required this.manoObra,
+    required this.porcentajeImpuesto,
+    required this.impuesto,
+    required this.subtotal,
+    required this.total,
+  });
+
+  factory TotalesFactura.de({
+    required OrdenMantenimiento orden,
+    required List<OrdenItem> items,
+    PerfilTaller? taller,
+  }) {
+    final repuestos = ReglasOrden.subtotalRepuestos(items);
+    final manoObra = orden.costoManoObra;
+    final porcentaje = taller?.porcentajeImpuestoDefecto ?? 0.0;
+    return TotalesFactura(
+      repuestos: repuestos,
+      manoObra: manoObra,
+      porcentajeImpuesto: porcentaje,
+      impuesto: ReglasOrden.impuesto(manoObra, porcentaje),
+      subtotal: repuestos + manoObra,
+      total: ReglasOrden.total(
+        subtotalRepuestos: repuestos,
+        costoManoObra: manoObra,
+        porcentajeImpuesto: porcentaje,
+      ),
+    );
+  }
+}
+
 class PdfFacturaService {
   static String buildInvoiceFileName(String numeroOrden) {
     final safe = numeroOrden
@@ -95,22 +155,16 @@ class PdfFacturaService {
       }
     }
 
-    // Los conceptos de mano de obra ya están sumados en orden.costoManoObra;
-    // sus items solo existen para que salgan detallados en la tabla.
-    final subtotalRepuestos = ReglasOrden.subtotalRepuestos(items);
-    final totalManoObra = orden.costoManoObra;
-
-    final porcentajeImpuesto = taller?.porcentajeImpuestoDefecto ?? 0.0;
-    // El IVA solo se calcula sobre la mano de obra: los repuestos se venden con
-    // el impuesto ya incluido en el precio de venta.
-    final impuestoManoObra =
-        ReglasOrden.impuesto(totalManoObra, porcentajeImpuesto);
-    final subtotalGeneral = subtotalRepuestos + totalManoObra;
-    final total = ReglasOrden.total(
-      subtotalRepuestos: subtotalRepuestos,
-      costoManoObra: totalManoObra,
-      porcentajeImpuesto: porcentajeImpuesto,
-    );
+    // Las cifras del recuadro de totales, calculadas en un solo sitio para
+    // poder comprobarlas sin tener que abrir el PDF (ver
+    // `test/factura_cifras_test.dart`).
+    final cifras = TotalesFactura.de(orden: orden, items: items, taller: taller);
+    final subtotalRepuestos = cifras.repuestos;
+    final totalManoObra = cifras.manoObra;
+    final porcentajeImpuesto = cifras.porcentajeImpuesto;
+    final impuestoManoObra = cifras.impuesto;
+    final subtotalGeneral = cifras.subtotal;
+    final total = cifras.total;
     final symbol = taller?.moneda == 'USD'
         ? r'u$s'
         : taller?.moneda == 'EUR'
