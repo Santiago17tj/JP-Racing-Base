@@ -12,6 +12,7 @@ class SelectorRepuestosModal extends StatefulWidget {
       onRepuestoSelected;
 
   const SelectorRepuestosModal({
+    super.key,
     required this.inventarioProvider,
     required this.onRepuestoSelected,
   });

@@ -22,6 +22,7 @@ class FacturaPreviewSheet extends StatelessWidget {
   final List<OrdenItem> items;
 
   const FacturaPreviewSheet({
+    super.key,
     required this.orden,
     required this.cliente,
     required this.vehiculo,
@@ -309,7 +310,7 @@ class FacturaPreviewSheet extends StatelessWidget {
                       final Email email = Email(
                         body: cuerpoCorreo,
                         subject:
-                            '${documento} - Orden #${orden.numeroOrden} - $nombreTaller',
+                            '$documento - Orden #${orden.numeroOrden} - $nombreTaller',
                         recipients: [cliente.email ?? ''],
                         attachmentPaths: [pdfFile],
                         isHTML: false,
@@ -358,11 +359,11 @@ class FacturaPreviewSheet extends StatelessWidget {
                           taller: taller,
                           preview: false,
                         );
-                        await Share.shareXFiles(
-                          [XFile(path)],
+                        await SharePlus.instance.share(ShareParams(
+                          files: [XFile(path)],
                           text:
-                              '${documento} - Orden #${orden.numeroOrden} - $nombreTaller',
-                        );
+                              '$documento - Orden #${orden.numeroOrden} - $nombreTaller',
+                        ));
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(

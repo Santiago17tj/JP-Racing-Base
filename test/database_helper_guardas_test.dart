@@ -67,7 +67,7 @@ void main() {
 
       final posiciones = [
         for (final g in guardas)
-          if (m.cuerpo.indexOf(g) != -1) m.cuerpo.indexOf(g)
+          if (m.cuerpo.contains(g)) m.cuerpo.indexOf(g)
       ];
       if (posiciones.isEmpty) continue; // lo cubre la prueba siguiente
       if (posicionDb < posiciones.reduce((a, b) => a < b ? a : b)) {

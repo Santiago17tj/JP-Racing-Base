@@ -535,8 +535,9 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
                     validator: (val) {
                       if (val == null || val.isEmpty) return 'Ingrese el monto';
                       final numVal = double.tryParse(val);
-                      if (numVal == null || numVal <= 0)
+                      if (numVal == null || numVal <= 0) {
                         return 'Monto inválido';
+                      }
                       return null;
                     },
                   ),

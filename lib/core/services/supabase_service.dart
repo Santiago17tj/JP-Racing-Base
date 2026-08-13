@@ -13,7 +13,10 @@ class SupabaseService {
   }
 
   static Future<void> initialize({required String url, required String anonKey}) async {
-    await Supabase.initialize(url: url, anonKey: anonKey);
+    // `anonKey` quedó deprecado y desaparecerá en una versión mayor. Es solo un
+    // renombrado: la clave es la misma. Se mantiene el nombre del parámetro de
+    // este método para no tocar a quien lo llama.
+    await Supabase.initialize(url: url, publishableKey: anonKey);
     _initialized = true;
   }
 

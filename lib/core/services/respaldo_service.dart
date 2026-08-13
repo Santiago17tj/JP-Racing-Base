@@ -135,11 +135,11 @@ class RespaldoService {
     await archivo.writeAsBytes(bytes);
 
     final resumen = datos['resumen'] as Map<String, dynamic>;
-    await Share.shareXFiles(
-      [XFile(archivo.path)],
+    await SharePlus.instance.share(ShareParams(
+      files: [XFile(archivo.path)],
       text: 'Respaldo Mecanix — ${resumen['ordenes']} órdenes, '
           '${resumen['clientes']} clientes. Guárdalo en un lugar seguro.',
-    );
+    ));
     return resumen;
   }
 
@@ -163,11 +163,11 @@ class RespaldoService {
     final dir = await getTemporaryDirectory();
     final archivo = File('${dir.path}/$nombre');
     await archivo.writeAsBytes(bytes);
-    await Share.shareXFiles(
-      [XFile(archivo.path)],
+    await SharePlus.instance.share(ShareParams(
+      files: [XFile(archivo.path)],
       text: 'Órdenes del taller (${ordenes.length}) — '
           'total facturado: ${CurrencyFormatter.format(ordenes.fold<double>(0, (s, o) => s + o.totalEstimado))}',
-    );
+    ));
     return ordenes.length;
   }
 }

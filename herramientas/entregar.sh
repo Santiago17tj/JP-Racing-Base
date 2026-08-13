@@ -30,8 +30,8 @@ fallar() { rojo "✗ $1"; exit 1; }
 
 # ── 1. El código compila y las pruebas pasan ────────────────────────────────
 paso "Análisis estático"
-flutter analyze --no-fatal-infos || fallar "Hay errores o warnings. No se entrega."
-verde "✓ sin errores ni warnings"
+flutter analyze || fallar "El analizador encontró algo. No se entrega."
+verde "✓ análisis limpio"
 
 paso "Pruebas"
 flutter test || fallar "Hay pruebas en rojo. No se entrega."

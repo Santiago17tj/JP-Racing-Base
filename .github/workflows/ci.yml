@@ -37,11 +37,11 @@ jobs:
       - name: Dependencias
         run: flutter pub get
 
-      # `--no-fatal-infos` deja pasar los avisos informativos (deprecaciones de
-      # Share y withOpacity, pendientes de migrar) pero **falla con cualquier
-      # error o warning**. Si algún día se limpian, quitar el flag.
+      # Sin `--no-fatal-infos`: el proyecto está en cero avisos y se queda así.
+      # Cualquier deprecación nueva o lint que aparezca pone el CI en rojo el
+      # mismo día, en vez de acumularse hasta que nadie los mira.
       - name: Análisis estático
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze
 
       - name: Pruebas
         run: flutter test

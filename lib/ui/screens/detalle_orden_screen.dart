@@ -1099,7 +1099,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
       decoration: BoxDecoration(
         color: AppTheme.surfaceLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: estadoColor.withOpacity(0.5), width: 1),
+        border: Border.all(color: estadoColor.withValues(alpha: 0.5), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1119,7 +1119,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: estadoColor.withOpacity(0.16),
+                  color: estadoColor.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(

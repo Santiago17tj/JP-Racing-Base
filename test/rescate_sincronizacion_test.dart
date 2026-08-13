@@ -272,7 +272,7 @@ void main() {
       final r = ResultadoRescate(
         ejecutado: true,
         tablas: [conteo('orden_items', local: 10, nube: 10)],
-        fallos: ['orden_items fila x: violación de llave foránea'],
+        fallos: const ['orden_items fila x: violación de llave foránea'],
       );
       expect(r.completo, isFalse);
     });
