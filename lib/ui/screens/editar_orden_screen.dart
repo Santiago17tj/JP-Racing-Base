@@ -173,8 +173,60 @@ class _EditarOrdenScreenState extends State<EditarOrdenScreen> {
     );
   }
 
+  /// Avisa de que cambiar entre orden y cotización no reajusta el stock que ya
+  /// se movió, y pide confirmación.
+  ///
+  /// El cambio solo vale de aquí en adelante: los repuestos ya añadidos
+  /// mantienen lo que descontaron. Devolverlos al inventario sería mentir —
+  /// esas piezas ya están montadas en la moto.
+  Future<bool> _confirmarCambioDeTipo() async {
+    final aCotizacion = _esCotizacion;
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: Text(
+          aCotizacion ? 'Convertir en cotización' : 'Convertir en orden',
+          style: const TextStyle(fontSize: 16),
+        ),
+        content: Text(
+          aCotizacion
+              ? 'A partir de ahora los repuestos que agregues no descontarán '
+                  'stock. Los que ya agregaste siguen descontados: no se '
+                  'devuelven al inventario, porque esas piezas ya salieron.'
+              : 'A partir de ahora los repuestos que agregues descontarán '
+                  'stock. Los que ya agregaste no se descuentan ahora: '
+                  'revísalos en el inventario si hace falta.',
+          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar',
+                style: TextStyle(color: AppTheme.textTertiary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Entendido, cambiar'),
+          ),
+        ],
+      ),
+    );
+    return confirmado == true;
+  }
+
   Future<void> _guardarOrden() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // El aviso de cambio de tipo va **antes** de encender el indicador de
+    // guardado: si no, el diálogo sale encima de un spinner girando.
+    if (!_esNuevoCliente &&
+        _esCotizacion != widget.ordenActual.esCotizacion &&
+        !await _confirmarCambioDeTipo()) {
+      return;
+    }
+    if (!mounted) return;
+
     final messenger  = ScaffoldMessenger.of(context);
     final navigator  = Navigator.of(context);
     final provider   = context.read<OrdenesProvider>();
@@ -205,6 +257,7 @@ class _EditarOrdenScreenState extends State<EditarOrdenScreen> {
           descripcion:         _problemaCtrl.text.trim(),
           mecanico:            _mecanicoCtrl.text.trim(),
           tipoServicio:        tipoServicioFinal,
+          esCotizacion:        _esCotizacion,
         );
       }
 
@@ -360,6 +413,7 @@ class _EditarOrdenScreenState extends State<EditarOrdenScreen> {
       const SizedBox(height: AppTheme.spacingSm),
       Container(padding: const EdgeInsets.all(AppTheme.spacingMd), decoration: AppTheme.cardDecoration,
         child: DropdownButtonFormField<Cliente>(
+          isExpanded: true,
           initialValue: _clienteSeleccionado, dropdownColor: AppTheme.surface,
           decoration: const InputDecoration(labelText: 'Cliente'),
           items: provider.clientes.map((c) => DropdownMenuItem(value: c, child: Text('${c.nombreCompleto} (${c.numeroDocumento})'))).toList(),
@@ -403,6 +457,7 @@ class _EditarOrdenScreenState extends State<EditarOrdenScreen> {
       const SizedBox(height: AppTheme.spacingSm),
       Container(padding: const EdgeInsets.all(AppTheme.spacingMd), decoration: AppTheme.cardDecoration,
         child: DropdownButtonFormField<Vehiculo>(
+          isExpanded: true,
           initialValue: _vehiculoSeleccionado, dropdownColor: AppTheme.surface,
           decoration: const InputDecoration(labelText: 'Motocicleta'),
           items: _vehiculosDelCliente.map((v) => DropdownMenuItem(value: v, child: Text('${v.marca} ${v.modelo} [${v.placaPatente}]'))).toList(),
@@ -417,6 +472,7 @@ class _EditarOrdenScreenState extends State<EditarOrdenScreen> {
       const SizedBox(height: AppTheme.spacingSm),
       Container(padding: const EdgeInsets.all(AppTheme.spacingMd), decoration: AppTheme.cardDecoration, child: Column(children: [
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: _tipoServicio, dropdownColor: AppTheme.surface,
           decoration: const InputDecoration(labelText: 'Tipo de Servicio'),
           items: TiposServicio.valores.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),

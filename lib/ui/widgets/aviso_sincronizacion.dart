@@ -19,7 +19,13 @@ import '../screens/rescate_datos_screen.dart';
 /// Se calla solo si no hay nada pendiente o si no se puede comprobar, para no
 /// inventarle alarmas al mecánico.
 class AvisoSincronizacion extends StatefulWidget {
-  const AvisoSincronizacion({super.key});
+  const AvisoSincronizacion({super.key, this.servicio});
+
+  /// Sin argumento usa el servicio real, igual que siempre. Las pruebas le
+  /// pasan uno propio: `contarPendientes` se traga cualquier excepción y
+  /// devuelve 0, así que sin poder sustituirlo la franja nunca se vería en una
+  /// prueba y el aviso más importante de la app quedaría sin cubrir.
+  final RescateSincronizacionService? servicio;
 
   @override
   State<AvisoSincronizacion> createState() => _AvisoSincronizacionState();
@@ -27,7 +33,8 @@ class AvisoSincronizacion extends StatefulWidget {
 
 class _AvisoSincronizacionState extends State<AvisoSincronizacion>
     with WidgetsBindingObserver {
-  static const _servicio = RescateSincronizacionService();
+  RescateSincronizacionService get _servicio =>
+      widget.servicio ?? const RescateSincronizacionService();
 
   int _pendientes = 0;
   bool _comprobando = false;

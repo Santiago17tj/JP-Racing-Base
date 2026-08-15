@@ -337,7 +337,9 @@ class _InventarioScreenState extends State<InventarioScreen> {
     }
 
     if (provider.repuestos.isEmpty) {
-      return Center(
+      // Scrollable: en un teléfono pequeño, con el buscador y los filtros
+      // arriba, a este mensaje le faltaban 31 px y se recortaba el botón.
+      return SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(AppTheme.spacingLg),
           child: Column(

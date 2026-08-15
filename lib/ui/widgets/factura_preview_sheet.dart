@@ -442,10 +442,19 @@ class FacturaPreviewSheet extends StatelessWidget {
   }
 
   Widget _buildFacturaTotalRow(String label, double value) {
+    // «Subtotal repuestos (IVA incl.)» junto a una cifra de millones no cabe
+    // en un teléfono pequeño. Se encoge la etiqueta, nunca el importe: en una
+    // factura, un número recortado es un número mal leído.
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: AppTheme.textSecondary)),
+        Flexible(
+          child: Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppTheme.textSecondary)),
+        ),
+        const SizedBox(width: 8),
         Text(CurrencyFormatter.format(value),
             style: const TextStyle(
                 color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),

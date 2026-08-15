@@ -15,6 +15,7 @@ import '../models/abono.dart';
 import '../../core/constants/enums.dart';
 import '../../core/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'fuente_de_datos.dart';
 
 /// Singleton para operaciones CRUD sobre la Base de Datos.
 ///
@@ -22,7 +23,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// - En dispositivos móviles (Android/iOS): Usa SQLite real (`sqflite`).
 /// - En Web: Utiliza una base de datos simulada en memoria para evitar errores
 ///   con WebAssembly/Service Workers (`sqflite_sw.js`) en servidores locales.
-class DatabaseHelper {
+class DatabaseHelper implements FuenteDeDatos {
   static String? activeTallerId;
 
   // Sin datos de ejemplo tampoco en web: mezclarlos con los reales convierte
@@ -669,6 +670,7 @@ class DatabaseHelper {
   ///
   /// No hace nada en web: allí cada consulta va directa a Supabase, así que no
   /// hay copia local que rellenar. Antes se bajaban cinco tablas para tirarlas.
+  @override
   Future<void> sincronizarDesdeNube(String tallerId) async {
     if (!SupabaseService.isConfigured || kIsWeb) return;
     try {
@@ -803,6 +805,7 @@ class DatabaseHelper {
   /// `taller_id` se conservan: son anteriores al campo y pertenecen a quien use
   /// el teléfono. Se ejecuta después de iniciar sesión, cuando ya se sabe cuál
   /// es el taller.
+  @override
   Future<int> limpiarDatosDeOtrosTalleres(String tallerActivo) async {
     if (kIsWeb) return 0;
     final db = await database;
@@ -904,6 +907,7 @@ class DatabaseHelper {
   //  CRUD: Perfil de Taller
   // ──────────────────────────────────────────────
 
+  @override
   Future<PerfilTaller> insertPerfilTaller(PerfilTaller taller) async {
     var tallerToSave = taller;
     if (_useCloud) {
@@ -970,6 +974,7 @@ class DatabaseHelper {
 
   /// Consulta SOLO la base de datos SQLite local, sin tocar la nube.
   /// Usado como fallback offline en [TallerProvider.cargarTaller].
+  @override
   Future<PerfilTaller?> getPerfilTallerLocal(String usuarioId) async {
     if (kIsWeb) return null;
     final db = await database;
@@ -985,6 +990,7 @@ class DatabaseHelper {
 
   /// Guarda el perfil del taller SOLO en SQLite local, sin escribir en la nube.
   /// Llamado desde [TallerProvider.cargarTaller] tras descargar datos de Supabase.
+  @override
   Future<void> savePerfilTallerLocal(PerfilTaller taller) async {
     if (kIsWeb) return;
     final db = await database;
@@ -999,6 +1005,7 @@ class DatabaseHelper {
   //  CRUD: Clientes
   // ──────────────────────────────────────────────
 
+  @override
   Future<void> insertCliente(Cliente cliente) async {
     final clienteToSave = cliente.tallerId == null && activeTallerId != null
         ? cliente.copyWith(tallerId: activeTallerId)
@@ -1039,6 +1046,7 @@ class DatabaseHelper {
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  @override
   Future<List<Cliente>> getClientes() async {
     if (_useCloud && kIsWeb) {
       try {
@@ -1083,6 +1091,7 @@ class DatabaseHelper {
     return maps.map((m) => Cliente.fromMap(_prepareFromDb(m))).toList();
   }
 
+  @override
   Future<Cliente?> getCliente(String id) async {
     if (_useCloud) {
       try {
@@ -1112,6 +1121,7 @@ class DatabaseHelper {
   //  CRUD: Vehículos
   // ──────────────────────────────────────────────
 
+  @override
   Future<void> insertVehiculo(Vehiculo vehiculo) async {
     final vehiculoToSave = vehiculo.tallerId == null && activeTallerId != null
         ? vehiculo.copyWith(tallerId: activeTallerId)
@@ -1134,6 +1144,7 @@ class DatabaseHelper {
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  @override
   Future<List<Vehiculo>> getVehiculosPorCliente(String clienteId) async {
     if (_useCloud && kIsWeb) {
       try {
@@ -1166,6 +1177,7 @@ class DatabaseHelper {
     return maps.map((m) => Vehiculo.fromMap(_prepareFromDb(m))).toList();
   }
 
+  @override
   Future<Vehiculo?> getVehiculo(String id) async {
     if (_useCloud && kIsWeb) {
       try {
@@ -1198,6 +1210,7 @@ class DatabaseHelper {
   //  CRUD: Repuestos
   // ──────────────────────────────────────────────
 
+  @override
   Future<void> insertRepuesto(Repuesto repuesto) async {
     final repuestoToSave = repuesto.tallerId == null && activeTallerId != null
         ? repuesto.copyWith(tallerId: activeTallerId)
@@ -1222,6 +1235,7 @@ class DatabaseHelper {
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  @override
   Future<List<Repuesto>> getRepuestos({
     String? busqueda,
     String? categoria,
@@ -1322,6 +1336,7 @@ class DatabaseHelper {
     return Repuesto.fromMap(_prepareFromDb(maps.first));
   }
 
+  @override
   Future<Repuesto?> getRepuestoPorCodigo(String codigoInterno) async {
     if (_useCloud && kIsWeb) {
       try {
@@ -1358,6 +1373,7 @@ class DatabaseHelper {
     return Repuesto.fromMap(_prepareFromDb(maps.first));
   }
 
+  @override
   Future<void> updateRepuesto(Repuesto repuesto) async {
     final repuestoToSave = repuesto.tallerId == null && activeTallerId != null
         ? repuesto.copyWith(tallerId: activeTallerId)
@@ -1382,6 +1398,7 @@ class DatabaseHelper {
         where: 'id = ?', whereArgs: [repuestoToSave.id]);
   }
 
+  @override
   Future<Repuesto?> ajustarStock({
     required String repuestoId,
     required int delta,
@@ -1481,6 +1498,7 @@ class DatabaseHelper {
     });
   }
 
+  @override
   Future<void> deleteRepuesto(String id) async {
     final nowStr = DateTime.now().toIso8601String();
     if (_useCloud) {
@@ -1500,6 +1518,7 @@ class DatabaseHelper {
         where: 'id = ?', whereArgs: [id]);
   }
 
+  @override
   Future<int> contarStockBajo() async {
     if (_useCloud && kIsWeb) {
       try {
@@ -1534,6 +1553,7 @@ class DatabaseHelper {
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
+  @override
   Future<List<HistorialStock>> getHistorial(String repuestoId) async {
     if (_useCloud && kIsWeb) {
       try {
@@ -1566,6 +1586,7 @@ class DatabaseHelper {
   //  CRUD: Órdenes de Mantenimiento
   // ──────────────────────────────────────────────
 
+  @override
   Future<void> insertOrden(OrdenMantenimiento orden) async {
     final ordenToSave = orden.tallerId == null && activeTallerId != null
         ? orden.copyWith(tallerId: activeTallerId)
@@ -1613,6 +1634,7 @@ class DatabaseHelper {
   /// antigua. Se pagina para que un taller con miles de órdenes no cargue
   /// todo de golpe: la pantalla pide de a [limite] y va sumando con
   /// [desplazamiento].
+  @override
   Future<List<OrdenMantenimiento>> getHistorialOrdenes({
     int limite = 50,
     int desplazamiento = 0,
@@ -1668,6 +1690,7 @@ class DatabaseHelper {
 
   /// Todos los vehículos del taller. Se usa para resolver la moto de cada
   /// orden sin consultar la base una vez por tarjeta.
+  @override
   Future<List<Vehiculo>> getVehiculos() async {
     if (_useCloud && kIsWeb) {
       try {
@@ -1697,6 +1720,7 @@ class DatabaseHelper {
     return maps.map((m) => Vehiculo.fromMap(_prepareFromDb(m))).toList();
   }
 
+  @override
   Future<List<OrdenMantenimiento>> getOrdenesActivas() async {
     if (_useCloud && kIsWeb) {
       try {
@@ -1736,6 +1760,7 @@ class DatabaseHelper {
         .toList();
   }
 
+  @override
   Future<OrdenMantenimiento?> getOrden(String id) async {
     if (_useCloud && kIsWeb) {
       try {
@@ -1767,6 +1792,7 @@ class DatabaseHelper {
     return OrdenMantenimiento.fromMap(_prepareFromDb(maps.first));
   }
 
+  @override
   Future<void> updateOrden(OrdenMantenimiento orden) async {
     final ordenToSave = orden.tallerId == null && activeTallerId != null
         ? orden.copyWith(tallerId: activeTallerId)
@@ -1875,6 +1901,7 @@ class DatabaseHelper {
     }
   }
 
+  @override
   Future<bool> agregarItemAOrden({
     required String ordenId,
     required String repuestoId,
@@ -2117,6 +2144,7 @@ class DatabaseHelper {
   }
 
   /// Agrega un ítem libre (no inventariado) a la orden, creando un repuesto genérico si es necesario.
+  @override
   Future<bool> agregarItemLibreAOrden({
     required String ordenId,
     required String nombre,
@@ -2170,6 +2198,7 @@ class DatabaseHelper {
 
   /// Elimina un ítem específico de una orden, restaurando stock si era un repuesto de inventario,
   /// o recalculando el costoManoObra si era mano de obra.
+  @override
   Future<bool> eliminarItemDeOrden({
     required String itemId,
     required String ordenId,
@@ -2321,6 +2350,7 @@ class DatabaseHelper {
     });
   }
 
+  @override
   Future<List<OrdenItem>> getItemsDeOrden(String ordenId) async {
     if (_useCloud && kIsWeb) {
       try {
@@ -2344,6 +2374,7 @@ class DatabaseHelper {
     return maps.map((m) => OrdenItem.fromMap(_prepareFromDb(m))).toList();
   }
 
+  @override
   Future<void> agregarManoObraAOrden(
       String ordenId, double monto, String concepto) async {
     const String repuestoManoObraId = ReglasOrden.idManoObra;
@@ -2543,6 +2574,7 @@ class DatabaseHelper {
   /// Se consulta la nube aunque `_useCloud` sea false: ese getter comprueba
   /// `currentUser` en tiempo de ejecución y puede dar false en una instalación
   /// limpia con la sesión ya activa.
+  @override
   Future<String> generarSiguienteNumeroOrden() async {
     if (SupabaseService.isConfigured) {
       try {
@@ -2575,6 +2607,7 @@ class DatabaseHelper {
 
   // ── Operaciones del Módulo Contable (registro_caja) ──
 
+  @override
   Future<void> insertRegistroCaja(RegistroCaja registro) async {
     final recordToSave = registro.tallerId == null && activeTallerId != null
         ? registro.copyWith(tallerId: activeTallerId)
@@ -2597,6 +2630,7 @@ class DatabaseHelper {
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  @override
   Future<List<RegistroCaja>> getRegistrosCaja() async {
     if (_useCloud && kIsWeb) {
       try {
@@ -2665,6 +2699,7 @@ class DatabaseHelper {
     return null;
   }
 
+  @override
   Future<void> editarRegistroCaja(
       String id, double monto, String concepto, String tipo) async {
     Future<void> updateLocal(RegistroCaja reg) async {
@@ -2718,6 +2753,7 @@ class DatabaseHelper {
   //  Operaciones de Cuentas por Cobrar y Abonos
   // ──────────────────────────────────────────────
 
+  @override
   Future<void> insertarAbono(Abono abono) async {
     if (!kIsWeb) {
       final db = await database;
@@ -2736,6 +2772,7 @@ class DatabaseHelper {
     }
   }
 
+  @override
   Future<List<Abono>> obtenerAbonosDeOrden(String ordenId) async {
     // En web no existe SQLite: abrir la base aquí lanzaba y mataba el método
     // antes de poder leer nada. Misma familia de bugs que `getItemsDeOrden`.
@@ -2770,6 +2807,7 @@ class DatabaseHelper {
     return res.map((m) => Abono.fromMap(m)).toList();
   }
 
+  @override
   Future<void> actualizarPagoOrden({
     required String ordenId,
     required double montoPagado,

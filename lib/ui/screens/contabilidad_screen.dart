@@ -605,15 +605,21 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Tres tarjetas en una fila dejan poco más de 90 px cada una en un
+          // teléfono pequeño: «Costos/Gastos» no cabe junto a su icono.
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                titulo,
-                style: const TextStyle(
-                  color: AppTheme.textTertiary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+              Flexible(
+                child: Text(
+                  titulo,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppTheme.textTertiary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               Icon(icon, color: color, size: 16),
@@ -659,12 +665,16 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
           const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Ganancia Neta',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+              Flexible(
+                child: Text(
+                  'Ganancia Neta',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               Icon(Icons.wallet_rounded, color: Colors.white, size: 16),

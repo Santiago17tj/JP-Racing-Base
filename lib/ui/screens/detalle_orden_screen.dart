@@ -355,13 +355,20 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '${widget.vehiculo.marca} ${widget.vehiculo.modelo}',
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary),
+              // La placa de al lado es lo que no puede recortarse; el modelo
+              // sí, que además suele ser largo («NKD 125 Sport»).
+              Expanded(
+                child: Text(
+                  '${widget.vehiculo.marca} ${widget.vehiculo.modelo}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary),
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -522,16 +529,22 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Los tres botones de la derecha son la única forma de añadir
+          // repuestos y mano de obra: el que se encoge es el título.
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'REPUESTOS Y TRABAJOS',
-                style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5),
+              const Flexible(
+                child: Text(
+                  'REPUESTOS Y TRABAJOS',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5),
+                ),
               ),
               Row(
                 children: [
@@ -924,6 +937,28 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
   double get _porcentajeImpuesto =>
       context.watch<TallerProvider>().taller?.porcentajeImpuestoDefecto ?? 0.0;
 
+  /// Una línea del recuadro de totales: concepto a la izquierda, importe a la
+  /// derecha. El concepto se recorta con puntos suspensivos si hace falta; el
+  /// importe, nunca.
+  Widget _filaTotal(String etiqueta, double valor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Flexible(
+          child: Text(etiqueta,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: AppTheme.textSecondary, fontSize: 13)),
+        ),
+        const SizedBox(width: 8),
+        Text(CurrencyFormatter.format(valor),
+            style:
+                const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+      ],
+    );
+  }
+
   Widget _buildTotalesCard(bool esListo) {
     final porcentaje = _porcentajeImpuesto;
     final impuesto = _ordenActual.impuestoManoObra(porcentaje);
@@ -932,45 +967,22 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
       decoration: AppTheme.cardDecoration,
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                  porcentaje > 0
-                      ? 'Subtotal Repuestos (IVA incl.)'
-                      : 'Subtotal Repuestos',
-                  style: const TextStyle(
-                      color: AppTheme.textSecondary, fontSize: 13)),
-              Text(CurrencyFormatter.format(_ordenActual.subtotalRepuestos),
-                  style: const TextStyle(
-                      color: AppTheme.textPrimary, fontSize: 13)),
-            ],
+          // Etiqueta encogible, importe intacto: en una pantalla de 320 px,
+          // «Subtotal Repuestos (IVA incl.)» junto a una cifra de millones no
+          // cabe. Lo que nunca se recorta es el número.
+          _filaTotal(
+            porcentaje > 0
+                ? 'Subtotal Repuestos (IVA incl.)'
+                : 'Subtotal Repuestos',
+            _ordenActual.subtotalRepuestos,
           ),
           const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Subtotal Mano de Obra',
-                  style:
-                      TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-              Text(CurrencyFormatter.format(_ordenActual.costoManoObra),
-                  style: const TextStyle(
-                      color: AppTheme.textPrimary, fontSize: 13)),
-            ],
-          ),
+          _filaTotal('Subtotal Mano de Obra', _ordenActual.costoManoObra),
           if (impuesto > 0) ...[
             const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('IVA ${porcentaje.toStringAsFixed(1)}% (mano de obra)',
-                    style: const TextStyle(
-                        color: AppTheme.textSecondary, fontSize: 13)),
-                Text(CurrencyFormatter.format(impuesto),
-                    style: const TextStyle(
-                        color: AppTheme.textPrimary, fontSize: 13)),
-              ],
-            ),
+            _filaTotal(
+                'IVA ${porcentaje.toStringAsFixed(1)}% (mano de obra)',
+                impuesto),
           ],
           const Divider(color: AppTheme.surfaceBorder, height: 16),
           Row(

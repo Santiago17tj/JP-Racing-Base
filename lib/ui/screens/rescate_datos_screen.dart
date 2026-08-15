@@ -15,14 +15,21 @@ import '../../data/database/database_helper.dart';
 /// La pantalla insiste en una idea: **lo que se ve en el teléfono no prueba
 /// nada**. Las cifras de la columna «en la nube» se leen de la nube.
 class RescateDatosScreen extends StatefulWidget {
-  const RescateDatosScreen({super.key});
+  const RescateDatosScreen({super.key, this.servicio});
+
+  /// Sin argumento usa el servicio real, igual que siempre. Las pruebas le
+  /// pasan uno propio: el de verdad necesita SQLite y Supabase, y sin poder
+  /// sustituirlo esta pantalla —la que dice si los datos del cliente están a
+  /// salvo— quedaría sin una sola prueba.
+  final RescateSincronizacionService? servicio;
 
   @override
   State<RescateDatosScreen> createState() => _RescateDatosScreenState();
 }
 
 class _RescateDatosScreenState extends State<RescateDatosScreen> {
-  static const _servicio = RescateSincronizacionService();
+  RescateSincronizacionService get _servicio =>
+      widget.servicio ?? const RescateSincronizacionService();
 
   ResultadoRescate? _resultado;
   bool _trabajando = false;

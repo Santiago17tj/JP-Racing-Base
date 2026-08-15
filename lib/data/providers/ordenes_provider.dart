@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/dominio/reglas_orden.dart';
 import '../../core/constants/enums.dart';
 import '../database/database_helper.dart';
+import '../database/fuente_de_datos.dart';
 import '../models/orden_mantenimiento.dart';
 import '../models/orden_item.dart';
 import '../models/cliente.dart';
@@ -12,7 +13,11 @@ import '../models/abono.dart';
 
 /// Proveedor para manejar el estado de las órdenes de mantenimiento.
 class OrdenesProvider extends ChangeNotifier {
-  final DatabaseHelper _db = DatabaseHelper.instance;
+  final FuenteDeDatos _db;
+
+  /// Sin argumentos usa la base real, igual que siempre. Las pruebas le pasan
+  /// una `FuenteDeDatosFalsa` para no depender de SQLite ni de Supabase.
+  OrdenesProvider({FuenteDeDatos? db}) : _db = db ?? DatabaseHelper.instance;
 
   List<OrdenMantenimiento> _ordenesActivas = [];
   List<OrdenMantenimiento> get ordenesActivas => _ordenesActivas;
@@ -259,6 +264,14 @@ class OrdenesProvider extends ChangeNotifier {
     }
   }
 
+  /// Actualiza los datos de cabecera de una orden ya abierta.
+  ///
+  /// [esCotizacion] **solo cambia la etiqueta de aquí en adelante**: los
+  /// repuestos que ya se añadieron mantienen el stock que descontaron (o que no
+  /// descontaron). Convertir una orden trabajada en cotización no le devuelve
+  /// nada al inventario, y al revés tampoco se lo quita. Ajustar el stock
+  /// retroactivamente sería peor: el mecánico ya tiene las piezas montadas en
+  /// la moto. La pantalla avisa de esto antes de guardar.
   Future<void> actualizarOrdenCompleta(
     String ordenId, {
     String? clienteId,
@@ -268,6 +281,7 @@ class OrdenesProvider extends ChangeNotifier {
     int? kilometraje,
     String? descripcion,
     DateTime? fechaIngreso,
+    bool? esCotizacion,
   }) async {
     try {
       final orden = await _db.getOrden(ordenId);
@@ -280,6 +294,7 @@ class OrdenesProvider extends ChangeNotifier {
           kilometrajeIngreso: kilometraje ?? orden.kilometrajeIngreso,
           descripcionProblema: descripcion ?? orden.descripcionProblema,
           fechaIngreso: fechaIngreso ?? orden.fechaIngreso,
+          esCotizacion: esCotizacion ?? orden.esCotizacion,
         );
         await _db.updateOrden(updated);
         await cargarDatos();

@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import '../models/perfil_taller.dart';
 import '../database/database_helper.dart';
+import '../database/fuente_de_datos.dart';
 import '../../core/services/supabase_service.dart';
 
 /// Provider encargado de gestionar el estado del Perfil del Taller (Tenant)
 /// y sincronizarlo con Supabase y localmente.
 class TallerProvider extends ChangeNotifier {
+  final FuenteDeDatos _db;
+
+  /// Sin argumentos usa la base real, igual que siempre.
+  TallerProvider({FuenteDeDatos? db}) : _db = db ?? DatabaseHelper.instance;
+
   PerfilTaller? _taller;
   PerfilTaller? get taller => _taller;
 
@@ -81,11 +87,11 @@ class TallerProvider extends ChangeNotifier {
           _taller = PerfilTaller.fromMap(cloudData);
           _hasWorkshop = true;
           // Persistir en SQLite local de forma síncrona (await estricto)
-          await DatabaseHelper.instance.savePerfilTallerLocal(_taller!);
+          await _db.savePerfilTallerLocal(_taller!);
           debugPrint('✅ [v1.1.5] Perfil cargado desde la nube: ${_taller!.nombreTaller}');
         } else {
           // ── PASO 2: Fallback — SQLite local (sin internet) ────────────────
-          final localTaller = await DatabaseHelper.instance.getPerfilTallerLocal(uid);
+          final localTaller = await _db.getPerfilTallerLocal(uid);
           if (localTaller != null) {
             _taller = localTaller;
             _hasWorkshop = true;
@@ -105,7 +111,7 @@ class TallerProvider extends ChangeNotifier {
                   .from('perfil_taller')
                   .upsert(nuevoTaller.toMap(), onConflict: 'usuario_administrador_id');
               _hasWorkshop = true;
-              await DatabaseHelper.instance.savePerfilTallerLocal(nuevoTaller);
+              await _db.savePerfilTallerLocal(nuevoTaller);
             } catch (dbError) {
               debugPrint('⚠️ No se pudo guardar el taller inicial: $dbError');
             }
@@ -119,8 +125,8 @@ class TallerProvider extends ChangeNotifier {
           // Si el teléfono se usó antes con otra cuenta, se quitan sus datos
           // antes de bajar los propios. Sin esto se iban acumulando sesión
           // tras sesión.
-          await DatabaseHelper.instance.limpiarDatosDeOtrosTalleres(_taller!.id);
-          await DatabaseHelper.instance.sincronizarDesdeNube(_taller!.id);
+          await _db.limpiarDatosDeOtrosTalleres(_taller!.id);
+          await _db.sincronizarDesdeNube(_taller!.id);
         }
       }
     } catch (e) {
@@ -152,7 +158,7 @@ class TallerProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final savedTaller = await DatabaseHelper.instance.insertPerfilTaller(nuevoTaller);
+      final savedTaller = await _db.insertPerfilTaller(nuevoTaller);
       _taller = savedTaller;
       _hasWorkshop = true;
       DatabaseHelper.activeTallerId = savedTaller.id;

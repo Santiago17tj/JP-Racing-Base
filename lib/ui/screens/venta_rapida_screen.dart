@@ -501,14 +501,25 @@ class _VentaRapidaScreenState extends State<VentaRapidaScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
               ),
+              // La etiqueta mide unos 199 px y en el panel lateral de la
+              // disposición ancha le quedan unos 197: desbordaba por 2 px en
+              // tablet, y por 1 en un teléfono de 320. `FittedBox` la encoge
+              // lo justo en vez de recortarla.
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.point_of_sale_rounded, size: 18),
                   SizedBox(width: 8),
-                  Text('REGISTRAR VENTA (PAGADA)',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('REGISTRAR VENTA (PAGADA)',
+                          maxLines: 1,
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5)),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -624,24 +635,30 @@ class _VentaRapidaScreenState extends State<VentaRapidaScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.shopping_cart_outlined,
-              size: 48, color: AppTheme.textTertiary.withValues(alpha: 0.6)),
-          const SizedBox(height: 12),
-          const Text(
-            'El carrito está vacío',
-            style: TextStyle(
-                fontWeight: FontWeight.bold, color: AppTheme.textSecondary),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Escanea un código o busca un repuesto en la parte superior.',
-            style: TextStyle(color: AppTheme.textTertiary, fontSize: 12),
-          ),
-        ],
+    // Scrollable a propósito: en un teléfono pequeño, con el resumen ocupando
+    // más de la mitad de la pantalla, a este mensaje le quedaban 50 px menos
+    // de los que necesita y se recortaba.
+    return SingleChildScrollView(
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.shopping_cart_outlined,
+                size: 48, color: AppTheme.textTertiary.withValues(alpha: 0.6)),
+            const SizedBox(height: 12),
+            const Text(
+              'El carrito está vacío',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Escanea un código o busca un repuesto en la parte superior.',
+              style: TextStyle(color: AppTheme.textTertiary, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     ).animate().fadeIn();
   }

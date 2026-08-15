@@ -358,6 +358,7 @@ class _CrearOrdenScreenState extends State<CrearOrdenScreen> {
             Expanded(
               flex: 2,
               child: DropdownButtonFormField<TipoDocumento>(
+          isExpanded: true,
                 initialValue: _tipoDocumento,
                 dropdownColor: AppTheme.surface,
                 decoration: const InputDecoration(labelText: 'Tipo Doc.'),
@@ -410,6 +411,7 @@ class _CrearOrdenScreenState extends State<CrearOrdenScreen> {
             Expanded(
               flex: 3,
               child: DropdownButtonFormField<RegimenFiscal>(
+          isExpanded: true,
                 initialValue: _regimenFiscal,
                 dropdownColor: AppTheme.surface,
                 decoration: const InputDecoration(labelText: 'Régimen Fiscal (DIAN)'),
@@ -448,6 +450,7 @@ class _CrearOrdenScreenState extends State<CrearOrdenScreen> {
       const SizedBox(height: AppTheme.spacingSm),
       Container(padding: const EdgeInsets.all(AppTheme.spacingMd), decoration: AppTheme.cardDecoration,
         child: DropdownButtonFormField<Cliente>(
+          isExpanded: true,
           initialValue: _clienteSeleccionado, dropdownColor: AppTheme.surface,
           decoration: const InputDecoration(labelText: 'Cliente'),
           items: provider.clientes.map((c) => DropdownMenuItem(value: c, child: Text('${c.nombreCompleto} (${c.numeroDocumento})'))).toList(),
@@ -491,6 +494,7 @@ class _CrearOrdenScreenState extends State<CrearOrdenScreen> {
       const SizedBox(height: AppTheme.spacingSm),
       Container(padding: const EdgeInsets.all(AppTheme.spacingMd), decoration: AppTheme.cardDecoration,
         child: DropdownButtonFormField<Vehiculo>(
+          isExpanded: true,
           initialValue: _vehiculoSeleccionado, dropdownColor: AppTheme.surface,
           decoration: const InputDecoration(labelText: 'Motocicleta'),
           items: _vehiculosDelCliente.map((v) => DropdownMenuItem(value: v, child: Text('${v.marca} ${v.modelo} [${v.placaPatente}]'))).toList(),
@@ -505,6 +509,7 @@ class _CrearOrdenScreenState extends State<CrearOrdenScreen> {
       const SizedBox(height: AppTheme.spacingSm),
       Container(padding: const EdgeInsets.all(AppTheme.spacingMd), decoration: AppTheme.cardDecoration, child: Column(children: [
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: _tipoServicio, dropdownColor: AppTheme.surface,
           decoration: const InputDecoration(labelText: 'Tipo de Servicio'),
           items: TiposServicio.valores.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),

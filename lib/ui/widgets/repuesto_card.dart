@@ -100,49 +100,69 @@ class RepuestoCard extends StatelessWidget {
             children: [
 
               // ── FILA 1: Categoría · SKU · Stock chip · Editar ─────────────
+              // Los dos primeros chips van en `Flexible` con puntos
+              // suspensivos: una categoría larga junto a una referencia de
+              // once caracteres desbordaba la fila en un teléfono de 360 px,
+              // que es el tamaño más común en Android.
               Row(
                 children: [
                   // Categoría
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: catColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: catColor.withValues(alpha: 0.28), width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(cat.icon, style: const TextStyle(fontSize: 11)),
-                        const SizedBox(width: 4),
-                        Text(cat.label,
-                            style: TextStyle(color: catColor, fontSize: 11, fontWeight: FontWeight.w600)),
-                      ],
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: catColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: catColor.withValues(alpha: 0.28), width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(cat.icon, style: const TextStyle(fontSize: 11)),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(cat.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color: catColor,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 6),
                   // SKU
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceLight,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.qr_code_2_rounded, size: 11, color: AppTheme.textTertiary),
-                        const SizedBox(width: 3),
-                        Text(
-                          repuesto.codigoInterno,
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'monospace',
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceLight,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.qr_code_2_rounded,
+                              size: 11, color: AppTheme.textTertiary),
+                          const SizedBox(width: 3),
+                          Flexible(
+                            child: Text(
+                              repuesto.codigoInterno,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   const Spacer(),
@@ -224,33 +244,45 @@ class RepuestoCard extends StatelessWidget {
               const SizedBox(height: 12),
 
               // ── FILA 3: Precio · Controles de stock ───────────────────────
+              // El precio va en `Flexible` con `FittedBox`: un repuesto de
+              // más de un millón desbordaba la fila. Se encoge en vez de
+              // recortarse — **una cifra de dinero cortada es peor que una
+              // pequeña**, porque se lee mal y nadie nota que falta un dígito.
               Row(
                 children: [
                   // Precio de venta
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceLight,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('P. VENTA',
-                            style: TextStyle(
-                                color: AppTheme.textTertiary,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.8)),
-                        const SizedBox(height: 2),
-                        Text(
-                          CurrencyFormatter.format(repuesto.precioVenta),
-                          style: const TextStyle(
-                              color: AppTheme.primaryLight,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800),
-                        ),
-                      ],
+                  Flexible(
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceLight,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('P. VENTA',
+                              style: TextStyle(
+                                  color: AppTheme.textTertiary,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.8)),
+                          const SizedBox(height: 2),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              CurrencyFormatter.format(repuesto.precioVenta),
+                              maxLines: 1,
+                              style: const TextStyle(
+                                  color: AppTheme.primaryLight,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const Spacer(),

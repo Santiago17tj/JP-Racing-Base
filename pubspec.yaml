@@ -1,7 +1,7 @@
 name: moto_taller_app
 description: App de gestión de taller de motocicletas y facturación rápida.
 publish_to: "none"
-version: 1.4.5+38
+version: 1.4.6+39
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
@@ -34,7 +34,7 @@ dependencies:
   google_generative_ai: ^0.4.6
   share_plus: ^13.2.0
   flutter_email_sender: ^10.0.1
-  mobile_scanner: ^6.0.2
+  mobile_scanner: ^7.0.0
   http: ^1.2.0
   shared_preferences: ^2.5.5
 

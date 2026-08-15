@@ -418,34 +418,42 @@ class _ChecklistDiagnosticoSheetState extends State<ChecklistDiagnosticoSheet> {
       margin: const EdgeInsets.only(bottom: AppTheme.spacingSm + 4),
       decoration: AppTheme.cardDecoration,
       clipBehavior: Clip.antiAlias,
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: marcadosSistema > 0,
-          iconColor: AppTheme.primaryLight,
-          collapsedIconColor: AppTheme.textTertiary,
-          leading: Icon(sistema.icono, size: 20, color: AppTheme.primaryLight),
-          title: Text(
-            sistema.nombre,
-            style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.bold),
-          ),
-          subtitle: Text(
-            marcadosSistema == 0
-                ? 'Sin revisar'
-                : '$marcadosSistema de ${sistema.puntos.length} marcados',
-            style: TextStyle(
-              color: marcadosSistema == 0
-                  ? AppTheme.textTertiary
-                  : AppTheme.primaryLight,
-              fontSize: 11,
+      // El `ExpansionTile` pinta su onda de contacto sobre el `Material` más
+      // cercano, y el fondo de este contenedor la tapaba: al tocar un sistema
+      // no se veía nada. Flutter lo avisa con una aserción en depuración. Este
+      // `Material` transparente no dibuja nada, solo le da superficie donde
+      // pintarse.
+      child: Material(
+        type: MaterialType.transparency,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: marcadosSistema > 0,
+            iconColor: AppTheme.primaryLight,
+            collapsedIconColor: AppTheme.textTertiary,
+            leading: Icon(sistema.icono, size: 20, color: AppTheme.primaryLight),
+            title: Text(
+              sistema.nombre,
+              style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold),
             ),
+            subtitle: Text(
+              marcadosSistema == 0
+                  ? 'Sin revisar'
+                  : '$marcadosSistema de ${sistema.puntos.length} marcados',
+              style: TextStyle(
+                color: marcadosSistema == 0
+                    ? AppTheme.textTertiary
+                    : AppTheme.primaryLight,
+                fontSize: 11,
+              ),
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(
+                AppTheme.spacingMd, 0, AppTheme.spacingMd, AppTheme.spacingSm),
+            children: sistema.puntos.map(_buildPuntoRow).toList(),
           ),
-          childrenPadding: const EdgeInsets.fromLTRB(
-              AppTheme.spacingMd, 0, AppTheme.spacingMd, AppTheme.spacingSm),
-          children: sistema.puntos.map(_buildPuntoRow).toList(),
         ),
       ),
     );

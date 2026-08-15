@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/constants/enums.dart';
 import '../../core/services/storage_service.dart';
 import '../database/database_helper.dart';
+import '../database/fuente_de_datos.dart';
 import '../models/repuesto.dart';
 import '../models/historial_stock.dart';
 
@@ -11,7 +12,10 @@ import '../models/historial_stock.dart';
 /// Centraliza la lógica de negocio: búsqueda, filtros, ajustes de stock
 /// y sincronización con SQLite. Notifica a la UI ante cualquier cambio.
 class InventarioProvider extends ChangeNotifier {
-  final DatabaseHelper _db = DatabaseHelper.instance;
+  final FuenteDeDatos _db;
+
+  /// Sin argumentos usa la base real, igual que siempre.
+  InventarioProvider({FuenteDeDatos? db}) : _db = db ?? DatabaseHelper.instance;
 
   // ── Estado ────────────────────────────────────
   List<Repuesto> _repuestos = [];
