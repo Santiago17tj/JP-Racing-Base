@@ -87,24 +87,27 @@ void main() {
     expect(find.text('- ${formato.format(95000)}'), findsOneWidget);
   });
 
-  testWidgets('con caja vacía lo que se ve son datos de demostración, y la '
-      'pantalla lo dice', (tester) async {
-    // Comportamiento vigente, documentado a propósito: sin sesión de Supabase
-    // y sin movimientos, la pantalla inventa seis para que no se vea vacía.
-    // La etiqueta VISTA DEMO es lo único que impide confundirlos con la caja
-    // real. Si alguien quita el mock, esta prueba avisa.
+  testWidgets('con la caja vacía no se inventa nada', (tester) async {
+    // Hasta el 15/08/2026 esta pantalla fabricaba seis movimientos —medio
+    // millón de pesos en conceptos falsos— cuando no había caja ni sesión de
+    // Supabase, marcados solo con una etiqueta pequeña. Era el último resto de
+    // los datos de demostración que se quitaron el 12/08 porque mentían. Un
+    // dueño de taller abriendo sus cuentas no puede ver dinero que no existe.
     await montar(tester);
 
-    expect(find.text('VISTA DEMO'), findsOneWidget);
-    expect(db.caja, isEmpty, reason: 'no se guardó nada: son de mentira');
+    expect(find.text('No hay transacciones registradas'), findsOneWidget);
+    expect(find.text('VISTA DEMO'), findsNothing);
+    expect(find.textContaining('Frenos y Motor'), findsNothing);
+    expect(find.text(formato.format(0)), findsWidgets,
+        reason: 'ingresos, gastos y ganancia en cero, que es la verdad');
+    expect(db.caja, isEmpty);
   });
 
-  testWidgets('en cuanto hay un movimiento real desaparece la vista de demo',
-      (tester) async {
+  testWidgets('con un movimiento real solo se ve ese', (tester) async {
     movimiento('ingreso', 250000, 'Pago de Orden #OT-00012');
     await montar(tester);
 
-    expect(find.text('VISTA DEMO'), findsNothing);
+    expect(find.text('Pago de Orden #OT-00012'), findsOneWidget);
     expect(find.textContaining('Frenos y Motor'), findsNothing);
     expect(find.text(formato.format(250000)), findsWidgets);
   });

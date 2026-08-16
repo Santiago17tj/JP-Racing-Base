@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/services/supabase_service.dart';
 import '../../data/models/registro_caja.dart';
 import '../../data/providers/ordenes_provider.dart';
 import '../../data/providers/taller_provider.dart';
@@ -29,59 +28,6 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
     });
   }
 
-  // Genera datos simulados si la base de datos está completamente vacía (por ejemplo, en primer ingreso de demo)
-  List<RegistroCaja> _obtenerMovimientosConMock(List<RegistroCaja> reales) {
-    if (reales.isNotEmpty) return reales;
-
-    // Si estamos en la nube con un usuario real, NO mostramos datos simulados de demo
-    final isLoggedIn = SupabaseService.isConfigured &&
-        SupabaseService.client.auth.currentUser != null;
-    if (isLoggedIn) {
-      return [];
-    }
-
-    // Generar movimientos mock para la demo
-    final now = DateTime.now();
-    return [
-      RegistroCaja(
-        tipo: 'ingreso',
-        monto: 250000,
-        concepto: 'Pago de Orden #OT-00001 (Frenos y Motor)',
-        fecha: now.subtract(const Duration(days: 4)),
-      ),
-      RegistroCaja(
-        tipo: 'egreso',
-        monto: 95000,
-        concepto: 'Costo de Repuestos - Orden #OT-00001',
-        fecha: now.subtract(const Duration(days: 4)),
-      ),
-      RegistroCaja(
-        tipo: 'ingreso',
-        monto: 180000,
-        concepto: 'Pago de Orden #OT-00002 (Mantenimiento)',
-        fecha: now.subtract(const Duration(days: 2)),
-      ),
-      RegistroCaja(
-        tipo: 'egreso',
-        monto: 45000,
-        concepto: 'Costo de Repuestos - Orden #OT-00002',
-        fecha: now.subtract(const Duration(days: 2)),
-      ),
-      RegistroCaja(
-        tipo: 'egreso',
-        monto: 60000,
-        concepto: 'Compra de Aceites y Filtros (Manual)',
-        fecha: now.subtract(const Duration(days: 1)),
-      ),
-      RegistroCaja(
-        tipo: 'ingreso',
-        monto: 135000,
-        concepto: 'Pago de Orden #OT-00003 (Eléctrico)',
-        fecha: now,
-      ),
-    ];
-  }
-
   @override
   Widget build(BuildContext context) {
     final ordenesProvider = context.watch<OrdenesProvider>();
@@ -96,8 +42,7 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
     final formatter = NumberFormat.currency(
         locale: 'es_CO', symbol: '$symbol ', decimalDigits: 0);
 
-    final movimientos =
-        _obtenerMovimientosConMock(ordenesProvider.movimientosCaja);
+    final movimientos = ordenesProvider.movimientosCaja;
 
     // Calcular métricas
     double ingresosTotales = 0.0;
@@ -183,35 +128,13 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
             const SizedBox(height: AppTheme.spacingLg),
 
             // ── LISTA DE MOVIMIENTOS RECIENTES ──
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Últimos Movimientos',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                if (ordenesProvider.movimientosCaja.isEmpty)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primarySurface,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'VISTA DEMO',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryLight,
-                      ),
-                    ),
-                  ),
-              ],
+            const Text(
+              'Últimos Movimientos',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
             ),
             const SizedBox(height: AppTheme.spacingMd),
 
