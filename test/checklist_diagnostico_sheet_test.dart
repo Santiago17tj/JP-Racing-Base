@@ -79,7 +79,7 @@ void main() {
       expect(resultado, isNotNull);
       expect(resultado, contains('ESTADO DE LA MOTO:'));
       expect(resultado, contains('Transmisión:'));
-      expect(resultado, contains('• Cadena: Cambiar'));
+      expect(resultado, contains('- Cadena: Cambiar'));
     });
 
     testWidgets('conserva las notas escritas a mano', (tester) async {
@@ -90,7 +90,7 @@ void main() {
         await t.tap(find.text('APLICAR AL DIAGNÓSTICO'));
       });
 
-      expect(resultado, contains('• Cadena: Revisar'));
+      expect(resultado, contains('- Cadena: Revisar'));
       expect(resultado, contains('El cliente dice que suena en frío'));
     });
 
@@ -106,7 +106,13 @@ void main() {
   });
 
   group('reabrir', () {
-    testWidgets('reconoce lo que ella misma escribió', (tester) async {
+    testWidgets('reconoce una orden vieja, guardada con la viñeta antigua',
+        (tester) async {
+      // Hasta la v1.4.6 los puntos se escribían con «•». Se cambió a «-»
+      // porque la viñeta salía como un cuadradito en el PDF de la factura,
+      // pero hay órdenes guardadas con ella en los teléfonos: si dejaran de
+      // reconocerse, sus puntos marcados pasarían a texto libre y se
+      // duplicarían al volver a guardar.
       final previo = ChecklistDiagnosticoSheet.construirTexto(
         const {},
         '',
@@ -122,11 +128,12 @@ void main() {
         await t.tap(find.text('APLICAR AL DIAGNÓSTICO'));
       });
 
-      expect(resultado, contains('• Cadena: Cambiar'));
+      expect(resultado, contains('- Cadena: Cambiar'));
     });
 
     testWidgets('no se come las notas que ya había, aunque no las entienda',
         (tester) async {
+      // Con la viñeta antigua, que es como están las órdenes ya guardadas.
       // Es la trampa: la nota libre puede llevar conceptos de mano de obra ya
       // cobrados. Si la hoja los borrara al reabrirse, desaparecerían del
       // diagnóstico sin que nadie se enterara.
@@ -140,7 +147,7 @@ void main() {
         await t.tap(find.text('APLICAR AL DIAGNÓSTICO'));
       });
 
-      expect(resultado, contains('• Cadena: Cambiar'));
+      expect(resultado, contains('- Cadena: Cambiar'));
       expect(resultado, contains('Mano de obra: sincronización de válvulas'));
     });
   });
@@ -197,6 +204,41 @@ void main() {
 
       expect(leido, seleccion);
       expect(resto, nota);
+    });
+
+    test('las dos viñetas se leen igual, la nueva y la antigua', () {
+      // La de hoy y la de las órdenes anteriores a la v1.4.6.
+      const nueva = '''ESTADO DE LA MOTO:
+Transmisión:
+- Cadena: Cambiar''';
+      const antigua = '''ESTADO DE LA MOTO:
+Transmisión:
+• Cadena: Cambiar''';
+
+      final (leidoNuevo, restoNuevo) =
+          ChecklistDiagnosticoSheet.parsear(nueva);
+      final (leidoAntiguo, restoAntiguo) =
+          ChecklistDiagnosticoSheet.parsear(antigua);
+
+      expect(leidoNuevo, {'Cadena': EstadoPunto.cambiar});
+      expect(leidoAntiguo, leidoNuevo);
+      expect(restoNuevo, isEmpty);
+      expect(restoAntiguo, isEmpty);
+    });
+
+    test('lo que produce hoy no lleva ningún carácter fuera de Latin-1', () {
+      // Latin-1 es lo que dibuja Helvetica, la fuente del PDF de la factura.
+      // Cualquier cosa fuera de ahí sale como un cuadradito en el papel que el
+      // taller le entrega al cliente.
+      final texto = ChecklistDiagnosticoSheet.construirTexto(
+        const {'Cadena': EstadoPunto.cambiar, 'Batería': EstadoPunto.bien},
+        'Revisar de nuevo en 500 km',
+      );
+
+      final fuera = texto.runes.where((r) => r > 0xFF).toList();
+      expect(fuera, isEmpty,
+          reason: 'caracteres que Helvetica no dibuja: '
+              '${fuera.map(String.fromCharCode).join()}');
     });
 
     test('un diagnóstico escrito enteramente a mano se conserva entero', () {

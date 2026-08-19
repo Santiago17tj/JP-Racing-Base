@@ -243,6 +243,37 @@ void main() {
       expect(find.text('TOTAL ESTIMADO'), findsOneWidget);
     }, skip: sinFuenteReal());
 
+    testWidgets('la cabecera de la orden separa kilometraje, servicio y mecánico',
+        (tester) async {
+      // En el teléfono del taller salía «Mantenimiento PreventivoJuan David
+      // parada», todo pegado: las tres celdas se repartían el ancho con
+      // `spaceBetween`, que no deja hueco cuando ya lo ocupan entero. No
+      // llegaba a desbordar, así que solo se ve mirando.
+      // Los datos exactos que se vieron pegados en el telefono del taller.
+      final orden = OrdenMantenimiento(
+        numeroOrden: 'OT-00017',
+        clienteId: cliente.id,
+        vehiculoId: moto.id,
+        tipoServicio: TiposServicio.preventivo,
+        kilometrajeIngreso: 4684,
+        mecanicoAsignado: 'Juan David parada',
+        estado: EstadoOrden.listaParaEntrega,
+      );
+      db.ordenes.add(orden);
+      await ordenesProvider.cargarDatos();
+      await montar(
+        tester,
+        telefonoComun,
+        DetalleOrdenScreen(orden: orden, cliente: cliente, vehiculo: moto),
+      );
+
+      final servicio = tester.getRect(find.text(TiposServicio.preventivo));
+      final mecanico = tester.getRect(find.text('Juan David parada'));
+
+      expect(servicio.right, lessThan(mecanico.left),
+          reason: 'el tipo de servicio y el mecánico no pueden tocarse');
+    }, skip: sinFuenteReal());
+
     testWidgets('órdenes activas con una tarjeta completa', (tester) async {
       crearOrden(); // nace en «En Reparación», que no es la pestaña inicial
       await montar(tester, telefonoPequeno, const OrdenesActivasScreen());

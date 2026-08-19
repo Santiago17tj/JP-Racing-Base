@@ -44,9 +44,9 @@ void main() {
       );
 
       expect(texto, contains('Motor:'));
-      expect(texto, contains('• Aceite de motor: Cambiar'));
+      expect(texto, contains('- Aceite de motor: Cambiar'));
       expect(texto, contains('Eléctrico:'));
-      expect(texto, contains('• Batería: Bien'));
+      expect(texto, contains('- Batería: Bien'));
       expect(texto, contains('Se entrega el lunes.'));
     });
 

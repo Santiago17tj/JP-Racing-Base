@@ -93,6 +93,19 @@ const List<_SistemaMoto> _sistemasMoto = [
 
 const String _tituloBloque = 'ESTADO DE LA MOTO:';
 
+/// Marca de cada punto en el texto del diagnostico.
+///
+/// Es un guion y no una vinieta porque **este texto acaba en el PDF de la
+/// factura**, que usa Helvetica: fuera de Latin-1 no dibuja el caracter, sino
+/// un cuadradito. Con la vinieta, cada linea del diagnostico salia con una
+/// caja delante en la factura que el taller le entrega al cliente.
+const String _vineta = '-';
+
+/// La vinieta que se uso hasta la v1.4.6. Se sigue reconociendo al leer: hay
+/// ordenes guardadas con ella en los telefonos, y si dejaran de parsearse sus
+/// puntos marcados pasarian a texto libre y se duplicarian al volver a guardar.
+const String _vinetaAnterior = '•';
+
 /// Hoja de inspección: permite marcar qué tiene la moto por sistema y
 /// genera automáticamente el texto del diagnóstico técnico.
 ///
@@ -137,7 +150,7 @@ class ChecklistDiagnosticoSheet extends StatefulWidget {
       }
       if (encabezados.contains(limpia)) continue;
 
-      if (limpia.startsWith('•')) {
+      if (limpia.startsWith(_vineta) || limpia.startsWith(_vinetaAnterior)) {
         final sinVinieta = limpia.substring(1).trim();
         final sep = sinVinieta.lastIndexOf(':');
         if (sep > 0) {
@@ -170,7 +183,7 @@ class ChecklistDiagnosticoSheet extends StatefulWidget {
         buffer.writeln('${sistema.nombre}:');
         for (final punto in sistema.puntos) {
           final estado = seleccion[punto];
-          if (estado != null) buffer.writeln('• $punto: ${estado.label}');
+          if (estado != null) buffer.writeln('$_vineta $punto: ${estado.label}');
         }
       }
     }

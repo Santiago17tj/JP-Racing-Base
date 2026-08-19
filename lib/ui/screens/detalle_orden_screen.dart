@@ -395,14 +395,27 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
             style: const TextStyle(color: AppTheme.textTertiary, fontSize: 12),
           ),
           const Divider(color: AppTheme.surfaceBorder, height: 16),
+          // Las tres celdas se repartian el ancho con `spaceBetween`, que no
+          // deja hueco cuando ya lo ocupan entero: en el telefono salia
+          // «Mantenimiento PreventivoJuan David parada», todo pegado. Ahora
+          // cada una toma su tercio con separacion fija.
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildMinicell(
-                  'KILOMETRAJE ING.', '${_ordenActual.kilometrajeIngreso} km'),
-              _buildMinicell('TIPO SERVICIO', _ordenActual.tipoServicio),
-              _buildMinicell(
-                  'MECÁNICO', _ordenActual.mecanicoAsignado ?? 'Sin asignar'),
+              Expanded(
+                child: _buildMinicell('KILOMETRAJE ING.',
+                    '${_ordenActual.kilometrajeIngreso} km'),
+              ),
+              const SizedBox(width: AppTheme.spacingSm),
+              Expanded(
+                child:
+                    _buildMinicell('TIPO SERVICIO', _ordenActual.tipoServicio),
+              ),
+              const SizedBox(width: AppTheme.spacingSm),
+              Expanded(
+                child: _buildMinicell(
+                    'MECÁNICO', _ordenActual.mecanicoAsignado ?? 'Sin asignar'),
+              ),
             ],
           ),
           if (_ordenActual.descripcionProblema != null) ...[

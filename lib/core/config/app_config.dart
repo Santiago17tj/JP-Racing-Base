@@ -8,7 +8,7 @@ class AppConfig {
 
   // ── App ─────────────────────────────────────────────────────────────────
   static const String appName = 'MotoTaller & Facturación';
-  static const String appVersion = '1.4.6';
+  static const String appVersion = '1.4.7';
 
   // ── Facturación Electrónica (Factus DIAN Sandbox) ────────────────────────
   /// Desactivada por defecto para no interferir con el flujo normal.
