@@ -196,10 +196,31 @@ class OrdenMantenimiento {
     final sRepuestos = (map['subtotal_repuestos'] as num?)?.toDouble() ?? 0.0;
     final total = cManoObra + sRepuestos;
     final mPagado = (map['monto_pagado'] as num?)?.toDouble() ?? 0.0;
-    final sPendiente = (map['saldo_pendiente'] as num?)?.toDouble() ??
-        (total - mPagado < 0 ? 0.0 : total - mPagado);
-    final ePago = map['estado_pago'] as String? ??
-        (sPendiente <= 0 ? 'pagado' : (mPagado > 0 ? 'parcial' : 'pendiente'));
+
+    // `saldo_pendiente` y `estado_pago` en la nube solo se ponen al dia cuando
+    // se registra un abono (`actualizarPagoOrden`). Si nunca se registro
+    // ninguno, la columna se quedo en su valor de creacion -- 0, por DEFAULT,
+    // nunca NULL -- asi que el `??` de abajo jamas se disparaba y una orden sin
+    // un peso cobrado se leia como saldada. Bug real encontrado el 17/09/2026:
+    // tres ordenes de un taller (100.000 / 365.000 / 1.156.000, cero abonos)
+    // aparecian con saldo 0 en el respaldo CSV -- como si estuvieran pagadas.
+    // La pantalla y la factura no lo sufrian porque recalculan con
+    // `saldoPendienteConImpuesto`; el respaldo si lee este campo tal cual.
+    //
+    // Si ya hubo al menos un abono, si se confia en la nube: ese valor incluye
+    // el IVA (ver `registrarAbono`), mas preciso que este modelo por su cuenta.
+    final saldoGuardado = (map['saldo_pendiente'] as num?)?.toDouble();
+    final saldoPorDefecto = total - mPagado < 0 ? 0.0 : total - mPagado;
+    final sinAbonoRegistrado =
+        (saldoGuardado == null || saldoGuardado == 0.0) &&
+            mPagado == 0.0 &&
+            total > 0.0;
+    final sPendiente =
+        sinAbonoRegistrado ? saldoPorDefecto : (saldoGuardado ?? saldoPorDefecto);
+    final ePago = sinAbonoRegistrado
+        ? (sPendiente <= 0 ? 'pagado' : (mPagado > 0 ? 'parcial' : 'pendiente'))
+        : (map['estado_pago'] as String? ??
+            (sPendiente <= 0 ? 'pagado' : (mPagado > 0 ? 'parcial' : 'pendiente')));
 
     return OrdenMantenimiento(
       id: map['id'] as String,
