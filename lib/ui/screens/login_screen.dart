@@ -166,28 +166,26 @@ class _LoginScreenState extends State<LoginScreen> {
                             },
                           ),
                           const SizedBox(height: 20),
-                          // ── Toggle + Modo Demo ─────────────────
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              TextButton(
-                                onPressed: () => setState(() {
-                                  _isSignUp = !_isSignUp;
-                                  auth.clearError();
-                                }),
-                                child: Text(
-                                  _isSignUp ? '¿Ya tienes cuenta? Ingresa' : '¿Sin cuenta? Regístrate',
-                                  style: const TextStyle(color: AppTheme.primaryLight, fontSize: 13),
-                                ),
+                          // "Modo Demo" se quitó el 17/09/2026: sin sesión de
+                          // Supabase, la RLS nunca encuentra un perfil de
+                          // taller y la app se quedaba para siempre en
+                          // "Cargando perfil del taller...", sin aviso ni
+                          // salida. Reconstruir un modo demo de verdad
+                          // implicaría volver a sembrar datos de ejemplo, que
+                          // es justo lo que se quitó por causar fugas entre
+                          // talleres (ver database_helper.dart).
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              onPressed: () => setState(() {
+                                _isSignUp = !_isSignUp;
+                                auth.clearError();
+                              }),
+                              child: Text(
+                                _isSignUp ? '¿Ya tienes cuenta? Ingresa' : '¿Sin cuenta? Regístrate',
+                                style: const TextStyle(color: AppTheme.primaryLight, fontSize: 13),
                               ),
-                              TextButton(
-                                onPressed: () => auth.bypassAuthentication(),
-                                child: const Text(
-                                  'Modo Demo',
-                                  style: TextStyle(color: AppTheme.textTertiary, fontSize: 13),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
