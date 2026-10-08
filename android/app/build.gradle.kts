@@ -42,8 +42,8 @@ android {
         applicationId = "com.mecanix.app"
         minSdk    = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = 43
-        versionName = "1.4.10"
+        versionCode = 44
+        versionName = "1.4.11"
     }
 
     buildTypes {

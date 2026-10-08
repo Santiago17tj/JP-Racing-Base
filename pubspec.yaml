@@ -1,7 +1,7 @@
 name: moto_taller_app
 description: App de gestión de taller de motocicletas y facturación rápida.
 publish_to: "none"
-version: 1.4.10+43
+version: 1.4.11+44
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
@@ -46,5 +46,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - Imagenes/ChatGPT Image 24 jun 2026, 01_34_18 p.m..png
