@@ -507,6 +507,35 @@ void main() {
       expect(db.caja, isEmpty);
     });
 
+    testWidgets('«Lista para entrega» no pone fecha de entrega; entregar sí',
+        (tester) async {
+      // Antes la fecha se ponía en los dos estados, y el CSV y la factura
+      // mostraban una entrega que todavía no había ocurrido.
+      final orden = crearOrden(costoManoObra: 100000, montoPagado: 119000);
+      await montar(tester, orden);
+
+      await elegirEstado(tester, EstadoOrden.listaParaEntrega);
+      expect(db.ordenPorId(orden.id).estado, EstadoOrden.listaParaEntrega);
+      expect(db.ordenPorId(orden.id).fechaEntrega, isNull);
+
+      await elegirEstado(tester, EstadoOrden.entregada);
+      expect(db.ordenPorId(orden.id).estado, EstadoOrden.entregada);
+      expect(db.ordenPorId(orden.id).fechaEntrega, isNotNull);
+    });
+
+    testWidgets('una orden que vuelve a un estado anterior pierde la fecha',
+        (tester) async {
+      final orden = crearOrden(costoManoObra: 100000, montoPagado: 119000);
+      await montar(tester, orden);
+
+      await elegirEstado(tester, EstadoOrden.entregada);
+      expect(db.ordenPorId(orden.id).fechaEntrega, isNotNull);
+
+      await elegirEstado(tester, EstadoOrden.enReparacion);
+      expect(db.ordenPorId(orden.id).estado, EstadoOrden.enReparacion);
+      expect(db.ordenPorId(orden.id).fechaEntrega, isNull);
+    });
+
     testWidgets('sin saldo no pregunta nada', (tester) async {
       final orden = crearOrden(costoManoObra: 100000, montoPagado: 119000);
       await montar(tester, orden);

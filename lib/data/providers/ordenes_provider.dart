@@ -238,13 +238,14 @@ class OrdenesProvider extends ChangeNotifier {
     try {
       final orden = await _db.getOrden(ordenId);
       if (orden != null) {
-        final DateTime? fechaEntrega = nuevoEstado == EstadoOrden.entregada || nuevoEstado == EstadoOrden.listaParaEntrega
-            ? DateTime.now()
-            : null;
-            
+        // La fecha de entrega es la de **entregar la moto**. Antes también se
+        // ponía al marcarla «Lista para entrega», así que el CSV y la factura
+        // mostraban una entrega que todavía no había ocurrido.
+        final entregada = nuevoEstado == EstadoOrden.entregada;
         final updated = orden.copyWith(
           estado: nuevoEstado,
-          fechaEntrega: fechaEntrega,
+          fechaEntrega: entregada ? DateTime.now() : null,
+          limpiarFechaEntrega: !entregada,
         );
         await _db.updateOrden(updated);
         await cargarDatos();

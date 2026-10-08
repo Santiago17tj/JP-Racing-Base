@@ -8,6 +8,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:moto_taller_app/core/services/pdf_web_helper_stub.dart'
     if (dart.library.html) 'package:moto_taller_app/core/services/pdf_web_helper.dart';
+import 'package:moto_taller_app/core/constants/enums.dart';
 import 'package:moto_taller_app/data/models/cliente.dart';
 import 'package:moto_taller_app/data/models/orden_item.dart';
 import 'package:moto_taller_app/data/models/orden_mantenimiento.dart';
@@ -96,6 +97,17 @@ class TotalesFactura {
 }
 
 class PdfFacturaService {
+  /// Fecha que lleva el documento: la de entrega si la moto ya se entregó
+  /// (así una reimpresión no cambia la fecha de la factura) y, si no, la de hoy.
+  /// Una orden «Lista para entrega» aún no tiene fecha de entrega.
+  static DateTime fechaDelDocumento(OrdenMantenimiento orden,
+      {DateTime? ahora}) {
+    if (orden.estado == EstadoOrden.entregada && orden.fechaEntrega != null) {
+      return orden.fechaEntrega!;
+    }
+    return ahora ?? DateTime.now();
+  }
+
   static String buildInvoiceFileName(String numeroOrden) {
     final safe = numeroOrden
         .toLowerCase()
@@ -205,9 +217,7 @@ class PdfFacturaService {
     final tituloDocumento = esCotizacion ? 'COTIZACIÓN' : 'FACTURA DE SERVICIO';
     final etiquetaTotal = esCotizacion ? 'TOTAL COTIZADO:' : 'TOTAL A PAGAR:';
 
-    // Fecha del documento: la de entrega si ya se entregó, para que una
-    // reimpresión no cambie la fecha de la factura.
-    final fechaDocumento = orden.fechaEntrega ?? DateTime.now();
+    final fechaDocumento = fechaDelDocumento(orden);
 
     // Los mismos colores de la app: grafito y el naranja de la marca.
     final primaryColor = PdfColor.fromHex('#17181B');

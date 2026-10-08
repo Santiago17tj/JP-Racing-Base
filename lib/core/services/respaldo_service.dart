@@ -6,8 +6,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../data/database/database_helper.dart';
+import '../../core/constants/enums.dart';
+import '../../data/models/cliente.dart';
 import '../../data/models/orden_mantenimiento.dart';
 import '../../data/models/perfil_taller.dart';
+import '../../data/models/vehiculo.dart';
 import '../dominio/reglas_orden.dart';
 import '../utils/currency_formatter.dart';
 import 'pdf_web_helper_stub.dart'
@@ -75,9 +78,16 @@ class RespaldoService {
   /// de obra y el saldo se calcula sobre ese total, por [ReglasOrden]. Antes
   /// el total iba sin IVA y el saldo a veces con él y a veces sin él (según
   /// hubiera habido abonos), así que Total − Abonado no daba el Saldo.
+  ///
+  /// `Fecha entrega` solo se llena en las órdenes **entregadas**: antes también
+  /// salía en las «Lista para entrega», y el contador veía una entrega que aún
+  /// no había ocurrido. Cliente y placa se buscan por id; si falta alguno, la
+  /// celda queda vacía en vez de romper el archivo.
   static String construirCsvOrdenes(
     List<OrdenMantenimiento> ordenes, {
     double porcentajeImpuesto = 0,
+    Map<String, Cliente> clientes = const {},
+    Map<String, Vehiculo> vehiculos = const {},
   }) {
     String celda(Object? valor) {
       final texto = (valor ?? '').toString().replaceAll('"', '""');
@@ -100,6 +110,8 @@ class RespaldoService {
         'Estado',
         'Fecha ingreso',
         'Fecha entrega',
+        'Cliente',
+        'Placa',
         'Mecanico',
         'Kilometraje',
         'Repuestos',
@@ -118,7 +130,11 @@ class RespaldoService {
         o.esCotizacion ? 'Cotizacion' : 'Orden',
         o.estado.label,
         o.fechaIngreso.toIso8601String().split('T').first,
-        o.fechaEntrega?.toIso8601String().split('T').first ?? '',
+        o.estado == EstadoOrden.entregada
+            ? (o.fechaEntrega?.toIso8601String().split('T').first ?? '')
+            : '',
+        clientes[o.clienteId]?.nombreCompleto ?? '',
+        vehiculos[o.vehiculoId]?.placaPatente ?? '',
         o.mecanicoAsignado ?? '',
         o.kilometrajeIngreso,
         numero(o.subtotalRepuestos),
@@ -174,8 +190,13 @@ class RespaldoService {
     final historial = await _db.getHistorialOrdenes(limite: 100000);
     final ordenes = <OrdenMantenimiento>[...activas, ...historial];
 
+    final clientes = {for (final c in await _db.getClientes()) c.id: c};
+    final vehiculos = {for (final v in await _db.getVehiculos()) v.id: v};
+
     final csv = construirCsvOrdenes(ordenes,
-        porcentajeImpuesto: porcentajeImpuesto);
+        porcentajeImpuesto: porcentajeImpuesto,
+        clientes: clientes,
+        vehiculos: vehiculos);
     // BOM para que Excel reconozca los acentos.
     final bytes = Uint8List.fromList([0xEF, 0xBB, 0xBF, ...utf8.encode(csv)]);
     final nombre =

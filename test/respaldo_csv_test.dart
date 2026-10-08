@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:moto_taller_app/core/constants/enums.dart';
 import 'package:moto_taller_app/core/services/respaldo_service.dart';
+import 'package:moto_taller_app/data/models/cliente.dart';
 import 'package:moto_taller_app/data/models/orden_mantenimiento.dart';
+import 'package:moto_taller_app/data/models/vehiculo.dart';
 
 /// El CSV que se le lleva al contador.
 ///
@@ -77,5 +80,69 @@ void main() {
     expect(valor(csv, 'Repuestos'), '1500,50');
     expect(valor(csv, 'Mano de obra'), '0');
     expect(csv, isNot(contains('.0"')));
+  });
+
+  group('cliente, placa y fecha de entrega', () {
+    final cliente = Cliente(
+      nombre: 'Carlos Andrés',
+      apellido: 'Gómez',
+      tipoDocumento: TipoDocumento.cc,
+      numeroDocumento: '1098765432',
+      telefono: '3150000002',
+    );
+    final moto = Vehiculo(
+      clienteId: cliente.id,
+      placaPatente: 'BCD45G',
+      marca: 'Honda',
+      modelo: 'CB 190R',
+      anio: 2022,
+    );
+
+    OrdenMantenimiento deCliente({
+      EstadoOrden estado = EstadoOrden.entregada,
+      DateTime? entrega,
+    }) =>
+        OrdenMantenimiento(
+          numeroOrden: 'OT-00020',
+          clienteId: cliente.id,
+          vehiculoId: moto.id,
+          tipoServicio: 'Mantenimiento',
+          kilometrajeIngreso: 15000,
+          estado: estado,
+          fechaEntrega: entrega,
+        );
+
+    test('cada orden lleva el nombre del cliente y la placa de su moto', () {
+      final csv = RespaldoService.construirCsvOrdenes(
+        [deCliente()],
+        clientes: {cliente.id: cliente},
+        vehiculos: {moto.id: moto},
+      );
+
+      expect(valor(csv, 'Cliente'), 'Carlos Andrés Gómez');
+      expect(valor(csv, 'Placa'), 'BCD45G');
+    });
+
+    test('si falta el cliente o la moto la celda queda vacía, sin romper', () {
+      final csv = RespaldoService.construirCsvOrdenes([deCliente()]);
+
+      expect(valor(csv, 'Cliente'), '');
+      expect(valor(csv, 'Placa'), '');
+      expect(columnas(csv, 1).length, columnas(csv, 0).length);
+    });
+
+    test('la fecha de entrega solo sale en las órdenes entregadas', () {
+      // Una orden vieja puede traer la fecha puesta desde que se marcó
+      // «Lista para entrega»: no es una entrega y no debe figurar como tal.
+      final csv = RespaldoService.construirCsvOrdenes([
+        deCliente(entrega: DateTime(2026, 8, 27)),
+        deCliente(
+            estado: EstadoOrden.listaParaEntrega,
+            entrega: DateTime(2026, 8, 27)),
+      ]);
+
+      expect(valor(csv, 'Fecha entrega', fila: 1), '2026-08-27');
+      expect(valor(csv, 'Fecha entrega', fila: 2), '');
+    });
   });
 }

@@ -74,8 +74,13 @@ class OrdenMantenimiento {
         updatedAt = updatedAt ?? DateTime.now(),
         fotosEstado = fotosEstado ?? [];
 
+  /// Días que lleva la moto en el taller. Solo se detiene al **entregarla**:
+  /// una orden «Lista para entrega» sigue ocupando sitio hasta que el cliente
+  /// se la lleva, y antes el contador se congelaba al marcarla como lista.
   int get diasEnTaller {
-    final fin = fechaEntrega ?? DateTime.now();
+    final fin = (estado == EstadoOrden.entregada && fechaEntrega != null)
+        ? fechaEntrega!
+        : DateTime.now();
     return fin.difference(fechaIngreso).inDays;
   }
 
@@ -118,6 +123,9 @@ class OrdenMantenimiento {
     String? estadoPago,
     DateTime? fechaIngreso,
     DateTime? fechaEntrega,
+    // `fechaEntrega: null` significa «no cambiar»; para borrarla (una orden
+    // entregada que vuelve a un estado anterior) hay que pedirlo aparte.
+    bool limpiarFechaEntrega = false,
     List<String>? fotosEstado,
     bool? esCotizacion,
   }) {
@@ -141,7 +149,8 @@ class OrdenMantenimiento {
       estadoPago: estadoPago ?? this.estadoPago,
       fechaIngreso: fechaIngreso ?? this.fechaIngreso,
       fechaPromesa: fechaPromesa,
-      fechaEntrega: fechaEntrega ?? this.fechaEntrega,
+      fechaEntrega:
+          limpiarFechaEntrega ? null : (fechaEntrega ?? this.fechaEntrega),
       createdAt: createdAt,
       updatedAt: DateTime.now(),
       fotosEstado: fotosEstado ?? this.fotosEstado,

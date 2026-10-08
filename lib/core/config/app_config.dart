@@ -7,8 +7,8 @@ class AppConfig {
       'sb_publishable_guKJMkQemsuYGvjAhjwSDg_XYsfQtQp';
 
   // ── App ─────────────────────────────────────────────────────────────────
-  static const String appName = 'MotoTaller & Facturación';
-  static const String appVersion = '1.4.11';
+  static const String appName = 'Mecanix';
+  static const String appVersion = '1.4.12';
 
   // ── Facturación Electrónica (Factus DIAN Sandbox) ────────────────────────
   /// Desactivada por defecto para no interferir con el flujo normal.

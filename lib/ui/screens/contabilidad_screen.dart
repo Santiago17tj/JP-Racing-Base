@@ -68,7 +68,7 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
         child: ListView(
           padding: const EdgeInsets.all(AppTheme.spacingMd),
           children: [
-            // Banner explicativo estilo Invoice Fly
+            // Banner explicativo
             Container(
               padding: const EdgeInsets.all(AppTheme.spacingMd),
               margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
