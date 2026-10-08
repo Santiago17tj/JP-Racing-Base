@@ -499,13 +499,15 @@ class _EditarOrdenScreenState extends State<EditarOrdenScreen> {
           decoration: const InputDecoration(labelText: 'Problema que reporta el cliente', hintText: 'Ej. Ruidos al frenar, cambio de aceite...', alignLabelWithHint: true),
           maxLines: 3, validator: _req),
         const SizedBox(height: 12),
-        SwitchListTile(
-          title: const Text('Registrar como Cotización', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
-          subtitle: const Text('No descontará stock de repuestos ni registrará flujos de caja contables.', style: TextStyle(fontSize: 12, color: AppTheme.textTertiary)),
-          value: _esCotizacion,
-          onChanged: (val) => setState(() => _esCotizacion = val),
-          activeThumbColor: AppTheme.primaryLight,
-          contentPadding: EdgeInsets.zero,
+        Material(
+          type: MaterialType.transparency,
+          child: SwitchListTile(
+            title: const Text('Registrar como Cotización', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
+            subtitle: const Text('No descontará stock de repuestos ni registrará flujos de caja contables.', style: TextStyle(fontSize: 12, color: AppTheme.textTertiary)),
+            value: _esCotizacion,
+            onChanged: (val) => setState(() => _esCotizacion = val),
+            contentPadding: EdgeInsets.zero,
+          ),
         ),
       ])),
     ]);

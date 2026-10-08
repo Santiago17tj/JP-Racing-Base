@@ -254,6 +254,9 @@ class OrdenesProvider extends ChangeNotifier {
     }
   }
 
+  /// La orden tal como está guardada, esté activa, entregada o cancelada.
+  Future<OrdenMantenimiento?> obtenerOrden(String id) => _db.getOrden(id);
+
   /// Agrega mano de obra a la orden de mantenimiento.
   Future<void> agregarManoObra(String ordenId, double monto, String concepto) async {
     try {
@@ -489,6 +492,13 @@ class OrdenesProvider extends ChangeNotifier {
     String? notas,
   }) async {
     try {
+      // Se busca la orden por id, no entre las activas: una orden ya
+      // entregada también puede recibir pagos, y antes el abono se guardaba
+      // sin sumar al monto pagado ni entrar a la caja.
+      final orden = await _db.getOrden(ordenId);
+      if (orden == null) {
+        throw StateError('No se encontró la orden para registrar el abono.');
+      }
       final abono = Abono(
         ordenId: ordenId,
         monto: monto,
@@ -498,11 +508,7 @@ class OrdenesProvider extends ChangeNotifier {
       );
       await _db.insertarAbono(abono);
 
-      // Obtener orden actual para recalcular montos
-      final ordenes = await _db.getOrdenesActivas();
-      final idx = ordenes.indexWhere((o) => o.id == ordenId);
-      if (idx != -1) {
-        final orden = ordenes[idx];
+      {
         final nuevoMontoPagado = orden.montoPagado + monto;
         // Por ReglasOrden y sobre el total CON impuesto, que es lo que el
         // cliente paga de verdad.

@@ -145,7 +145,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester
           .tap(find
-              .text('${CategoriaRepuesto.motor.icon}  ${CategoriaRepuesto.motor.label}')
+              .text(CategoriaRepuesto.motor.label)
               .last);
       await tester.pumpAndSettle();
       await guardar(tester, 'CREAR REPUESTO');

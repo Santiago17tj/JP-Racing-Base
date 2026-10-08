@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -154,23 +155,18 @@ class PdfFacturaService {
   }) async {
     final pdf = pw.Document(compress: comprimir);
 
-    // Carga de logo dinámico o fallback
+    // El logo del taller sale de la caché del teléfono (la misma que usa la
+    // app para mostrarlo), así que también funciona sin internet. Si el taller
+    // no tiene logo, la factura va sin él: el respaldo de antes era el logo de
+    // JP Racing, que habría salido en las facturas de cualquier otro taller.
     pw.ImageProvider? logoImage;
     if (taller?.logoUrl != null && taller!.logoUrl!.isNotEmpty) {
       try {
-        logoImage = await networkImage(taller.logoUrl!);
+        final archivo =
+            await DefaultCacheManager().getSingleFile(taller.logoUrl!);
+        logoImage = pw.MemoryImage(await archivo.readAsBytes());
       } catch (e) {
-        debugPrint('Error cargando logo de red para PDF: $e');
-      }
-    }
-
-    if (logoImage == null) {
-      try {
-        final logoBytes = await rootBundle
-            .load('Imagenes/ChatGPT Image 24 jun 2026, 01_34_18 p.m..png');
-        logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
-      } catch (e) {
-        debugPrint('Error cargando logo por defecto: $e');
+        debugPrint('Error cargando el logo para el PDF: $e');
       }
     }
 
@@ -213,13 +209,16 @@ class PdfFacturaService {
     // reimpresión no cambie la fecha de la factura.
     final fechaDocumento = orden.fechaEntrega ?? DateTime.now();
 
-    // Paleta de colores Premium
-    final primaryColor =
-        PdfColor.fromHex('#0F172A'); // Azul grisáceo muy oscuro
-    final accentColor =
-        PdfColor.fromHex('#3B82F6'); // Azul de contraste (Primary Light)
-    final neutralLight = PdfColor.fromHex('#F8FAFC'); // Fondo gris claro
-    final neutralDark = PdfColor.fromHex('#334155'); // Texto secundario
+    // Los mismos colores de la app: grafito y el naranja de la marca.
+    final primaryColor = PdfColor.fromHex('#17181B');
+    final accentColor = PdfColor.fromHex('#C8500E');
+    final neutralLight = PdfColor.fromHex('#F6F5F3');
+    final neutralDark = PdfColor.fromHex('#4A4D52');
+    final miles = NumberFormat.decimalPattern('es');
+    final porcentajeTexto =
+        porcentajeImpuesto == porcentajeImpuesto.roundToDouble()
+            ? porcentajeImpuesto.toStringAsFixed(0)
+            : porcentajeImpuesto.toStringAsFixed(1);
 
     pdf.addPage(
       pw.MultiPage(
@@ -241,16 +240,18 @@ class PdfFacturaService {
               children: [
                 pw.Row(
                   children: [
-                    pw.Container(
-                      width: 55,
-                      height: 55,
-                      decoration: pw.BoxDecoration(
-                        borderRadius: pw.BorderRadius.circular(10),
-                        image: pw.DecorationImage(
-                            image: logoImage!, fit: pw.BoxFit.cover),
+                    if (logoImage != null) ...[
+                      pw.Container(
+                        width: 55,
+                        height: 55,
+                        decoration: pw.BoxDecoration(
+                          borderRadius: pw.BorderRadius.circular(10),
+                          image: pw.DecorationImage(
+                              image: logoImage, fit: pw.BoxFit.cover),
+                        ),
                       ),
-                    ),
-                    pw.SizedBox(width: 12),
+                      pw.SizedBox(width: 12),
+                    ],
                     pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
@@ -269,7 +270,7 @@ class PdfFacturaService {
                           pw.Text(ubicacionTaller,
                               style: pw.TextStyle(
                                   fontSize: 8, color: neutralDark)),
-                        if (taller?.telefono != null)
+                        if ((taller?.telefono ?? '').trim().isNotEmpty)
                           pw.Text('Tel: ${taller!.telefono!}',
                               style: pw.TextStyle(
                                   fontSize: 8, color: neutralDark)),
@@ -299,7 +300,7 @@ class PdfFacturaService {
                             fontWeight: pw.FontWeight.bold,
                             color: primaryColor)),
                     pw.Text(
-                        'Fecha: ${fechaDocumento.toLocal().toString().split(' ')[0]}',
+                        'Fecha: ${DateFormat('dd/MM/yyyy').format(fechaDocumento.toLocal())}',
                         style: pw.TextStyle(fontSize: 8, color: neutralDark)),
                   ],
                 ),
@@ -366,7 +367,7 @@ class PdfFacturaService {
                       pw.Text('Placa: ${vehiculo.placaPatente}',
                           style: pw.TextStyle(fontSize: 8, color: neutralDark)),
                       pw.Text(
-                          'Año: ${vehiculo.anio} | KM: ${orden.kilometrajeIngreso} km',
+                          'Año: ${vehiculo.anio} | KM: ${miles.format(orden.kilometrajeIngreso)} km',
                           style: pw.TextStyle(fontSize: 8, color: neutralDark)),
                       if (vehiculo.color != null)
                         pw.Text('Color: ${vehiculo.color}',
@@ -450,13 +451,7 @@ class PdfFacturaService {
                     children: [
                       pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
-                          // Las pantallas guardan la mano de obra como
-                          // 'Mano de obra: <concepto>'. Sin quitar el prefijo,
-                          // la línea sale como «Mano de obra: Mano de obra».
-                          child: pw.Text(
-                              item.descripcion
-                                  .replaceAll('Mano de obra: ', '')
-                                  .trim(),
+                          child: pw.Text(_descripcionLinea(item),
                               style: const pw.TextStyle(fontSize: 8))),
                       pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
@@ -466,13 +461,13 @@ class PdfFacturaService {
                       pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
                           child: pw.Text(
-                              '$symbol${CurrencyFormatter.format(item.precioUnitario).replaceAll("\$", "")}',
+                              CurrencyFormatter.format(item.precioUnitario, simbolo: symbol),
                               style: const pw.TextStyle(fontSize: 8),
                               textAlign: pw.TextAlign.right)),
                       pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
                           child: pw.Text(
-                              '$symbol${CurrencyFormatter.format(item.subtotal).replaceAll("\$", "")}',
+                              CurrencyFormatter.format(item.subtotal, simbolo: symbol),
                               style: const pw.TextStyle(fontSize: 8),
                               textAlign: pw.TextAlign.right)),
                     ],
@@ -521,10 +516,14 @@ class PdfFacturaService {
                               fontWeight: pw.FontWeight.bold,
                               color: neutralDark)),
                       if (orden.diagnostico != null &&
-                          orden.diagnostico!.trim().isNotEmpty)
-                        pw.Text('Diagnóstico: ${orden.diagnostico!.trim()}',
+                          orden.diagnostico!.trim().isNotEmpty) ...[
+                        pw.Text('Diagnóstico:',
                             style:
                                 pw.TextStyle(fontSize: 7, color: neutralDark)),
+                        pw.Text(orden.diagnostico!.trim(),
+                            style:
+                                pw.TextStyle(fontSize: 7, color: neutralDark)),
+                      ],
                       if (orden.notasMecanico != null &&
                           orden.notasMecanico!.isNotEmpty)
                         pw.Text('Notas: ${orden.notasMecanico}',
@@ -554,7 +553,7 @@ class PdfFacturaService {
                           pw.Text('Mano de obra:',
                               style: const pw.TextStyle(fontSize: 8)),
                           pw.Text(
-                              '$symbol${CurrencyFormatter.format(totalManoObra).replaceAll("\$", "")}',
+                              CurrencyFormatter.format(totalManoObra, simbolo: symbol),
                               style: const pw.TextStyle(fontSize: 8)),
                         ],
                       ),
@@ -568,7 +567,7 @@ class PdfFacturaService {
                                   : 'Repuestos:',
                               style: const pw.TextStyle(fontSize: 8)),
                           pw.Text(
-                              '$symbol${CurrencyFormatter.format(subtotalRepuestos).replaceAll("\$", "")}',
+                              CurrencyFormatter.format(subtotalRepuestos, simbolo: symbol),
                               style: const pw.TextStyle(fontSize: 8)),
                         ],
                       ),
@@ -582,7 +581,7 @@ class PdfFacturaService {
                                     fontSize: 8,
                                     fontWeight: pw.FontWeight.bold)),
                             pw.Text(
-                                '$symbol${CurrencyFormatter.format(subtotalGeneral).replaceAll("\$", "")}',
+                                CurrencyFormatter.format(subtotalGeneral, simbolo: symbol),
                                 style: const pw.TextStyle(
                                     fontSize: 8,
                                     fontWeight: pw.FontWeight.bold)),
@@ -593,10 +592,10 @@ class PdfFacturaService {
                           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
                             pw.Text(
-                                'IVA ${porcentajeImpuesto.toStringAsFixed(1)}% (mano de obra):',
+                                'IVA $porcentajeTexto% (mano de obra):',
                                 style: const pw.TextStyle(fontSize: 8)),
                             pw.Text(
-                                '$symbol${CurrencyFormatter.format(impuestoManoObra).replaceAll("\$", "")}',
+                                CurrencyFormatter.format(impuestoManoObra, simbolo: symbol),
                                 style: const pw.TextStyle(fontSize: 8)),
                           ],
                         ),
@@ -613,7 +612,7 @@ class PdfFacturaService {
                                   fontWeight: pw.FontWeight.bold,
                                   color: primaryColor)),
                           pw.Text(
-                              '$symbol${CurrencyFormatter.format(total).replaceAll("\$", "")}',
+                              CurrencyFormatter.format(total, simbolo: symbol),
                               style: pw.TextStyle(
                                   fontSize: 9,
                                   fontWeight: pw.FontWeight.bold,
@@ -631,7 +630,7 @@ class PdfFacturaService {
                                     color: PdfColors.green700,
                                     fontWeight: pw.FontWeight.bold)),
                             pw.Text(
-                                '$symbol${CurrencyFormatter.format(cifras.montoPagado).replaceAll("\$", "")}',
+                                CurrencyFormatter.format(cifras.montoPagado, simbolo: symbol),
                                 style: const pw.TextStyle(
                                     fontSize: 8,
                                     color: PdfColors.green700,
@@ -642,7 +641,7 @@ class PdfFacturaService {
                         pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
-                            pw.Text('SALDO PENDIEN.:',
+                            pw.Text('SALDO PENDIENTE:',
                                 style: pw.TextStyle(
                                     fontSize: 8,
                                     color: cifras.saldoPendiente > 0
@@ -650,7 +649,7 @@ class PdfFacturaService {
                                         : PdfColors.green700,
                                     fontWeight: pw.FontWeight.bold)),
                             pw.Text(
-                                '$symbol${CurrencyFormatter.format(cifras.saldoPendiente).replaceAll("\$", "")}',
+                                CurrencyFormatter.format(cifras.saldoPendiente, simbolo: symbol),
                                 style: pw.TextStyle(
                                     fontSize: 8,
                                     color: cifras.saldoPendiente > 0
@@ -671,5 +670,27 @@ class PdfFacturaService {
     );
 
     return pdf.save();
+  }
+
+  /// Texto de una línea de la tabla. La mano de obra se rotula como tal (es
+  /// lo único que lleva IVA) y el descuento se dice: sin él, «2 x 40.000 =
+  /// 72.000» parecía un error de cuentas.
+  static String _descripcionLinea(OrdenItem item) {
+    var texto = item.descripcion;
+    if (ReglasOrden.esManoObraCrudo(item.repuestoId)) {
+      // Las pantallas guardan 'Mano de obra: <concepto>'; si el concepto ya
+      // empieza así, no se repite («Mano de obra: Mano de obra»).
+      final concepto = texto.replaceAll('Mano de obra: ', '').trim();
+      texto = concepto.toLowerCase().startsWith('mano de obra')
+          ? concepto
+          : 'Mano de obra: $concepto';
+    }
+    if (item.descuento > 0) {
+      final pct = item.descuento == item.descuento.roundToDouble()
+          ? item.descuento.toStringAsFixed(0)
+          : item.descuento.toStringAsFixed(1);
+      texto = '$texto (desc. $pct%)';
+    }
+    return texto;
   }
 }

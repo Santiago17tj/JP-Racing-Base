@@ -299,7 +299,7 @@ class _VentaRapidaScreenState extends State<VentaRapidaScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('Venta Rápida de Mostrador'),
+        title: const Text('Venta Rápida'),
         actions: [
           IconButton(
             icon: const Icon(Icons.qr_code_scanner_rounded,
@@ -429,7 +429,7 @@ class _VentaRapidaScreenState extends State<VentaRapidaScreen> {
             _buildSummaryRow(
                 'Valor del Costo', CurrencyFormatter.format(_totalCosto)),
           if (verFinanzas) const SizedBox(height: 12),
-          _buildSummaryRow('Impuestos incl.', '\$0.00'),
+          _buildSummaryRow('IVA', 'Incluido en el precio'),
           if (lateral) const Spacer() else const SizedBox(height: 16),
 
           // Card de Ganancia Neta Estimada
@@ -588,7 +588,11 @@ class _VentaRapidaScreenState extends State<VentaRapidaScreen> {
       constraints: const BoxConstraints(maxHeight: 260),
       decoration: AppTheme.cardDecoration,
       clipBehavior: Clip.antiAlias,
-      child: ListView.separated(
+      // Sin este `Material` el efecto de toque de cada fila quedaría debajo
+      // del fondo de la tarjeta.
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListView.separated(
         shrinkWrap: true,
         padding: EdgeInsets.zero,
         itemCount: _searchResults.length,
@@ -630,6 +634,7 @@ class _VentaRapidaScreenState extends State<VentaRapidaScreen> {
             ),
           );
         },
+        ),
       ),
     );
   }

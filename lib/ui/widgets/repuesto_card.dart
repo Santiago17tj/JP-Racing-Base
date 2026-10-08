@@ -2,7 +2,6 @@ import 'package:moto_taller_app/core/utils/currency_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/constants/enums.dart';
 import '../../data/models/repuesto.dart';
 
 /// Tarjeta rediseñada de repuesto para la lista de inventario.
@@ -35,7 +34,7 @@ class RepuestoCard extends StatelessWidget {
   // ── Colores del chip de stock ─────────────────────────────────────────────
   Color get _stockColor {
     if (repuesto.stockActual == 0) return AppTheme.error;
-    if (repuesto.stockCritico)    return const Color(0xFFEF4444);
+    if (repuesto.stockCritico)    return AppTheme.error;
     if (repuesto.stockBajo)       return AppTheme.warning;
     return AppTheme.success;
   }
@@ -54,317 +53,238 @@ class RepuestoCard extends StatelessWidget {
     return 'EN STOCK';
   }
 
-  Color _categoryColor() {
-    switch (repuesto.categoria) {
-      case CategoriaRepuesto.frenos:       return const Color(0xFFEF4444);
-      case CategoriaRepuesto.motor:        return const Color(0xFFF97316);
-      case CategoriaRepuesto.electrico:    return const Color(0xFFFACC15);
-      case CategoriaRepuesto.transmision:  return const Color(0xFF8B5CF6);
-      case CategoriaRepuesto.suspension:   return const Color(0xFF6366F1);
-      case CategoriaRepuesto.carroceria:   return const Color(0xFF14B8A6);
-      case CategoriaRepuesto.llantas:      return const Color(0xFF64748B);
-      case CategoriaRepuesto.lubricantes:  return const Color(0xFFA855F7);
-      case CategoriaRepuesto.filtros:      return const Color(0xFF06B6D4);
-      case CategoriaRepuesto.accesorios:   return const Color(0xFFEC4899);
-      case CategoriaRepuesto.otros:        return const Color(0xFF94A3B8);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final cat = repuesto.categoria;
-    final catColor = _categoryColor();
+    final textos = Theme.of(context).textTheme;
+    final pideAtencion = repuesto.stockBajo;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: AppTheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: repuesto.stockActual == 0
-                ? AppTheme.error.withValues(alpha: 0.45)
-                : repuesto.stockCritico
-                    ? AppTheme.error.withValues(alpha: 0.3)
-                    : repuesto.stockBajo
-                        ? AppTheme.warning.withValues(alpha: 0.3)
-                        : AppTheme.surfaceBorder,
-            width: 1.2,
+    // Diseño de etiqueta de estante: a la izquierda las unidades, grandes y del
+    // color de su estado, separadas por una línea punteada como de etiqueta
+    // desprendible; a la derecha qué es y cuánto vale. Se lee de un vistazo y
+    // caben el doble de repuestos por pantalla que con la tarjeta anterior.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: AppTheme.surface,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          side: BorderSide(
+            color: pideAtencion
+                ? _stockColor.withValues(alpha: 0.45)
+                : AppTheme.surfaceBorder,
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-
-              // ── FILA 1: Categoría · SKU · Stock chip · Editar ─────────────
-              // Los dos primeros chips van en `Flexible` con puntos
-              // suspensivos: una categoría larga junto a una referencia de
-              // once caracteres desbordaba la fila en un teléfono de 360 px,
-              // que es el tamaño más común en Android.
-              Row(
-                children: [
-                  // Categoría
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: catColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: catColor.withValues(alpha: 0.28), width: 1),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(cat.icon, style: const TextStyle(fontSize: 11)),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(cat.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    color: catColor,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600)),
+        child: InkWell(
+          onTap: onTap,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Mantener pulsado abre el ajuste libre, igual que antes.
+                GestureDetector(
+                  onLongPress: () {
+                    HapticFeedback.mediumImpact();
+                    _mostrarDialogoAjuste(context);
+                  },
+                  child: Container(
+                    width: 76,
+                    color: _stockBgColor,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 12),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '${repuesto.stockActual}',
+                            style: (textos.headlineMedium ??
+                                    const TextStyle())
+                                .copyWith(
+                              color: _stockColor,
+                              fontSize: 34,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
+                            ),
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            _stockLabel,
+                            style: TextStyle(
+                              color: _stockColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          'mín. ${repuesto.stockMinimo}',
+                          style: TextStyle(
+                            color: _stockColor.withValues(alpha: 0.7),
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  // SKU
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceLight,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.qr_code_2_rounded,
-                              size: 11, color: AppTheme.textTertiary),
-                          const SizedBox(width: 3),
-                          Flexible(
+                ),
+                const _LineaPunteada(),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 8, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            // Sin `Spacer`: con él, categoría y referencia se
+                            // quedaban con un tercio del ancho cada una.
+                            Expanded(
+                              child: Row(
+                                children: [
+                            Icon(cat.iconData,
+                                size: 13, color: AppTheme.textTertiary),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                cat.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppTheme.textTertiary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const Text('  ·  ',
+                                style:
+                                    TextStyle(color: AppTheme.textTertiary)),
+                            Flexible(
+                              child: Text(
+                                repuesto.codigoInterno,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                            ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                iconSize: 18,
+                                tooltip: 'Editar repuesto',
+                                icon: const Icon(Icons.edit_outlined,
+                                    color: AppTheme.textTertiary),
+                                onPressed: () {
+                                  HapticFeedback.lightImpact();
+                                  onEdit();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          repuesto.nombre,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: (textos.titleMedium ?? const TextStyle())
+                              .copyWith(
+                            color: AppTheme.textPrimary,
+                            fontSize: 18,
+                            height: 1.15,
+                          ),
+                        ),
+                        if (repuesto.marcaRepuesto != null &&
+                            repuesto.marcaRepuesto!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
                             child: Text(
-                              repuesto.codigoInterno,
+                              repuesto.marcaRepuesto!,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: 'monospace',
-                              ),
+                                  color: AppTheme.textSecondary, fontSize: 13),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  // Chip de stock
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _stockBgColor,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: _stockColor.withValues(alpha: 0.35), width: 1),
-                    ),
-                    child: Text(
-                      _stockLabel,
-                      style: TextStyle(
-                        color: _stockColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  // Botón editar (lápiz)
-                  GestureDetector(
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      onEdit();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primarySurface,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.edit_rounded, size: 14, color: AppTheme.primaryLight),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              // ── FILA 2: Nombre + Marca ─────────────────────────────────────
-              Text(
-                repuesto.nombre,
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  height: 1.3,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (repuesto.marcaRepuesto != null && repuesto.marcaRepuesto!.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  repuesto.marcaRepuesto!,
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                ),
-              ],
-              if (repuesto.descripcion != null && repuesto.descripcion!.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceLight,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    repuesto.descripcion!,
-                    style: const TextStyle(color: AppTheme.textTertiary, fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 12),
-
-              // ── FILA 3: Precio · Controles de stock ───────────────────────
-              // El precio va en `Flexible` con `FittedBox`: un repuesto de
-              // más de un millón desbordaba la fila. Se encoge en vez de
-              // recortarse — **una cifra de dinero cortada es peor que una
-              // pequeña**, porque se lee mal y nadie nota que falta un dígito.
-              Row(
-                children: [
-                  // Precio de venta
-                  Flexible(
-                    child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceLight,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('P. VENTA',
-                              style: TextStyle(
-                                  color: AppTheme.textTertiary,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.8)),
-                          const SizedBox(height: 2),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              CurrencyFormatter.format(repuesto.precioVenta),
-                              maxLines: 1,
-                              style: const TextStyle(
-                                  color: AppTheme.primaryLight,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800),
+                        const SizedBox(height: 10),
+                        // Se encoge el precio, nunca se corta: una cifra de
+                        // dinero recortada se lee mal y nadie nota el dígito
+                        // que falta.
+                        Row(
+                          children: [
+                            Expanded(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  CurrencyFormatter.format(
+                                      repuesto.precioVenta),
+                                  maxLines: 1,
+                                  style: (textos.titleLarge ??
+                                          const TextStyle())
+                                      .copyWith(
+                                    color: AppTheme.primaryLight,
+                                    fontSize: 23,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  // Controles de stock: [−] [NÚMERO / ESTADO] [+] [⚙]
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _StockBtn(
-                        icon: Icons.remove_rounded,
-                        color: AppTheme.error,
-                        enabled: repuesto.stockActual > 0,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          onDecrement();
-                        },
-                      ),
-                      const SizedBox(width: 6),
-                      // Contador central — tap largo abre ajuste personalizado
-                      GestureDetector(
-                        onLongPress: () {
-                          HapticFeedback.mediumImpact();
-                          _mostrarDialogoAjuste(context);
-                        },
-                        child: Container(
-                          constraints: const BoxConstraints(minWidth: 64),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: _stockBgColor,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: _stockColor.withValues(alpha: 0.35), width: 1),
-                          ),
-                          child: Column(
-                            children: [
-                              Text(
-                                '${repuesto.stockActual}',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: _stockColor,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              Text(
-                                _stockLabel,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: _stockColor.withValues(alpha: 0.75),
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                            ],
-                          ),
+                            const SizedBox(width: 8),
+                            _StockBtn(
+                              icon: Icons.remove_rounded,
+                              color: AppTheme.error,
+                              enabled: repuesto.stockActual > 0,
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                onDecrement();
+                              },
+                            ),
+                            const SizedBox(width: 6),
+                            _StockBtn(
+                              icon: Icons.add_rounded,
+                              color: AppTheme.success,
+                              enabled: true,
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                onIncrement();
+                              },
+                            ),
+                            const SizedBox(width: 6),
+                            _StockBtn(
+                              icon: Icons.tune_rounded,
+                              color: AppTheme.textSecondary,
+                              enabled: true,
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                _mostrarDialogoAjuste(context);
+                              },
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      _StockBtn(
-                        icon: Icons.add_rounded,
-                        color: AppTheme.success,
-                        enabled: true,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          onIncrement();
-                        },
-                      ),
-                      const SizedBox(width: 6),
-                      // Botón de ajuste personalizado (⚙)
-                      _StockBtn(
-                        icon: Icons.tune_rounded,
-                        color: AppTheme.primaryLight,
-                        enabled: true,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          _mostrarDialogoAjuste(context);
-                        },
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -597,7 +517,7 @@ class _StockBtnState extends State<_StockBtn>
       child: ScaleTransition(
         scale: _scale,
         child: Container(
-          width: 34, height: 34,
+          width: 38, height: 38,
           decoration: BoxDecoration(
             color: active
                 ? widget.color.withValues(alpha: 0.13)
@@ -611,11 +531,42 @@ class _StockBtnState extends State<_StockBtn>
           ),
           child: Icon(
             widget.icon,
-            size: 17,
+            size: 19,
             color: active ? widget.color : AppTheme.textTertiary,
           ),
         ),
       ),
     );
   }
+}
+
+/// Línea vertical punteada entre las unidades y el resto de la etiqueta.
+class _LineaPunteada extends StatelessWidget {
+  const _LineaPunteada();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 1,
+      child: CustomPaint(painter: _PintorPunteado()),
+    );
+  }
+}
+
+class _PintorPunteado extends CustomPainter {
+  const _PintorPunteado();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pincel = Paint()
+      ..color = AppTheme.surfaceBorder
+      ..strokeWidth = 1;
+    const trazo = 4.0, hueco = 3.0;
+    for (var y = 0.0; y < size.height; y += trazo + hueco) {
+      canvas.drawLine(Offset(0.5, y), Offset(0.5, y + trazo), pincel);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

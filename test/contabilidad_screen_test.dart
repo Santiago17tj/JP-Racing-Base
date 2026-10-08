@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import 'package:moto_taller_app/core/utils/currency_formatter.dart';
 import 'package:moto_taller_app/data/models/perfil_taller.dart';
 import 'package:moto_taller_app/data/models/registro_caja.dart';
 import 'package:moto_taller_app/data/providers/ordenes_provider.dart';
@@ -13,12 +13,9 @@ import 'ayudas/fuente_de_datos_falsa.dart';
 
 /// La caja del taller: lo que entró, lo que salió y lo que queda.
 ///
-/// Ojo con el formato: esta pantalla **no usa `CurrencyFormatter`**, se arma su
-/// propio `NumberFormat` con el símbolo del taller. Por eso aquí se replica el
-/// mismo formato en vez de reutilizar el de las demás pantallas.
+/// Las cifras esperadas se escriben a mano; el formateador solo les da forma.
 void main() {
-  final formato =
-      NumberFormat.currency(locale: 'es_CO', symbol: r'$ ', decimalDigits: 0);
+  String pesos(num monto) => CurrencyFormatter.format(monto.toDouble());
 
   late FuenteDeDatosFalsa db;
   late OrdenesProvider ordenesProvider;
@@ -70,9 +67,9 @@ void main() {
 
     await montar(tester);
 
-    expect(find.text(formato.format(350000)), findsOneWidget); // ingresos
-    expect(find.text(formato.format(95000)), findsWidgets); // egresos
-    expect(find.text(formato.format(255000)), findsOneWidget); // ganancia
+    expect(find.text(pesos(350000)), findsOneWidget); // ingresos
+    expect(find.text(pesos(95000)), findsWidgets); // egresos
+    expect(find.text(pesos(255000)), findsOneWidget); // ganancia
     expect(find.text('Pago de Orden #OT-00012'), findsOneWidget);
   });
 
@@ -83,8 +80,8 @@ void main() {
 
     await montar(tester);
 
-    expect(find.text('+ ${formato.format(250000)}'), findsOneWidget);
-    expect(find.text('- ${formato.format(95000)}'), findsOneWidget);
+    expect(find.text('+ ${pesos(250000)}'), findsOneWidget);
+    expect(find.text('- ${pesos(95000)}'), findsOneWidget);
   });
 
   testWidgets('con la caja vacía no se inventa nada', (tester) async {
@@ -98,7 +95,7 @@ void main() {
     expect(find.text('No hay transacciones registradas'), findsOneWidget);
     expect(find.text('VISTA DEMO'), findsNothing);
     expect(find.textContaining('Frenos y Motor'), findsNothing);
-    expect(find.text(formato.format(0)), findsWidgets,
+    expect(find.text(pesos(0)), findsWidgets,
         reason: 'ingresos, gastos y ganancia en cero, que es la verdad');
     expect(db.caja, isEmpty);
   });
@@ -109,7 +106,7 @@ void main() {
 
     expect(find.text('Pago de Orden #OT-00012'), findsOneWidget);
     expect(find.textContaining('Frenos y Motor'), findsNothing);
-    expect(find.text(formato.format(250000)), findsWidgets);
+    expect(find.text(pesos(250000)), findsWidgets);
   });
 
   testWidgets('un egreso manual entra en caja y baja la ganancia',
@@ -135,7 +132,7 @@ void main() {
     expect(nuevo.monto, 60000);
     expect(nuevo.concepto, 'Compra de herramientas');
 
-    expect(find.text(formato.format(190000)), findsOneWidget); // ganancia
+    expect(find.text(pesos(190000)), findsOneWidget); // ganancia
     expect(find.text('Egreso registrado en caja'), findsOneWidget);
   });
 
@@ -173,7 +170,7 @@ void main() {
     expect(db.caja, hasLength(1), reason: 'edita, no duplica');
     expect(db.caja.single.monto, 275000);
     expect(db.caja.single.concepto, 'Pago de Orden #OT-00012 (corregido)');
-    expect(find.text(formato.format(275000)), findsWidgets);
+    expect(find.text(pesos(275000)), findsWidgets);
   });
 
   testWidgets('cancelar la edición deja el movimiento como estaba',

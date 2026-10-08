@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/currency_formatter.dart';
 import '../../data/models/registro_caja.dart';
 import '../../data/providers/ordenes_provider.dart';
 import '../../data/providers/taller_provider.dart';
@@ -39,8 +40,8 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
         : taller?.moneda == 'EUR'
             ? '€'
             : r'$';
-    final formatter = NumberFormat.currency(
-        locale: 'es_CO', symbol: '$symbol ', decimalDigits: 0);
+    String formatear(double monto) =>
+        CurrencyFormatter.format(monto, simbolo: symbol);
 
     final movimientos = ordenesProvider.movimientosCaja;
 
@@ -78,12 +79,12 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.auto_awesome_rounded,
-                      color: AppTheme.primaryLight),
+                  Icon(Icons.info_outline_rounded,
+                      color: AppTheme.textTertiary, size: 20),
                   SizedBox(width: AppTheme.spacingSm),
                   Expanded(
                     child: Text(
-                      'Las órdenes de servicio marcadas como "Entregada" registran automáticamente sus ingresos y egresos de inventario.',
+                      'Los abonos, los pagos al entregar una moto y las ventas rápidas entran solos a la caja. Los gastos se anotan con «Nuevo Movimiento».',
                       style: TextStyle(
                           fontSize: 12, color: AppTheme.textSecondary),
                     ),
@@ -102,20 +103,20 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
                   children: [
                     _buildMetricCard(
                       titulo: 'Ingresos',
-                      monto: formatter.format(ingresosTotales),
+                      monto: formatear(ingresosTotales),
                       color: AppTheme.success,
                       icon: Icons.trending_up_rounded,
                       width: cardWidth,
                     ),
                     _buildMetricCard(
-                      titulo: 'Costos/Gastos',
-                      monto: formatter.format(egresosTotales),
+                      titulo: 'Gastos',
+                      monto: formatear(egresosTotales),
                       color: AppTheme.warning,
                       icon: Icons.trending_down_rounded,
                       width: cardWidth,
                     ),
                     _buildNetProfitCard(
-                      monto: formatter.format(gananciaNeta),
+                      monto: formatear(gananciaNeta),
                       width: cardWidth,
                     ),
                   ],
@@ -208,12 +209,12 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
                                   fontWeight: FontWeight.w600,
                                   color: AppTheme.textPrimary,
                                 ),
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                DateFormat('dd/MM/yyyy • hh:mm a')
+                                DateFormat('dd/MM/yy · HH:mm')
                                     .format(mov.fecha),
                                 style: const TextStyle(
                                   fontSize: 11,
@@ -226,7 +227,7 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
                         const SizedBox(width: AppTheme.spacingSm),
                         // Monto
                         Text(
-                          '${esIngreso ? '+' : '-'} ${formatter.format(mov.monto)}',
+                          '${esIngreso ? '+' : '-'} ${formatear(mov.monto)}',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -529,14 +530,14 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Tres tarjetas en una fila dejan poco más de 90 px cada una en un
-          // teléfono pequeño: «Costos/Gastos» no cabe junto a su icono.
+          // teléfono pequeño: la etiqueta puede pasar a dos líneas.
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
                 child: Text(
                   titulo,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: AppTheme.textTertiary,
@@ -549,15 +550,20 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            monto,
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
+          // Un importe recortado se lee mal y nadie nota el dígito que
+          // falta: se encoge, nunca se corta.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              monto,
+              maxLines: 1,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -591,7 +597,7 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
               Flexible(
                 child: Text(
                   'Ganancia Neta',
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Colors.white70,
@@ -604,15 +610,20 @@ class _ContabilidadScreenState extends State<ContabilidadScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            monto,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
+          // Un importe recortado se lee mal y nadie nota el dígito que
+          // falta: se encoge, nunca se corta.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              monto,
+              maxLines: 1,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

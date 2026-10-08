@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_email_sender/flutter_email_sender.dart';
+import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -73,7 +74,7 @@ class FacturaPreviewSheet extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Factura de servicio',
+                      orden.esCotizacion ? 'Cotización' : 'Factura de servicio',
                       style: Theme.of(context)
                           .textTheme
                           .titleLarge
@@ -90,11 +91,7 @@ class FacturaPreviewSheet extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(AppTheme.spacingLg),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF121826), Color(0xFF1B2335)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: AppTheme.surface,
                   borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                   border: Border.all(color: AppTheme.surfaceBorder, width: 1.2),
                 ),
@@ -112,25 +109,18 @@ class FacturaPreviewSheet extends StatelessWidget {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
+                            // Sin logo propio, un icono neutro: antes salía
+                            // el de JP Racing en la factura de cualquier taller.
                             child: logoUrl.isNotEmpty
                                 ? CachedNetworkImage(
                                     imageUrl: logoUrl,
                                     width: 64,
                                     height: 64,
                                     fit: BoxFit.cover,
-                                    errorWidget: (_, __, ___) => Image.asset(
-                                      'Imagenes/ChatGPT Image 24 jun 2026, 01_34_18 p.m..png',
-                                      width: 64,
-                                      height: 64,
-                                      fit: BoxFit.cover,
-                                    ),
+                                    errorWidget: (_, __, ___) =>
+                                        const _LogoVacio(),
                                   )
-                                : Image.asset(
-                                    'Imagenes/ChatGPT Image 24 jun 2026, 01_34_18 p.m..png',
-                                    width: 64,
-                                    height: 64,
-                                    fit: BoxFit.cover,
-                                  ),
+                                : const _LogoVacio(),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -153,31 +143,23 @@ class FacturaPreviewSheet extends StatelessWidget {
                                     style: const TextStyle(
                                         color: AppTheme.textSecondary,
                                         fontSize: 12)),
-                              const SizedBox(height: 6),
-                              Text(
-                                  orden.esCotizacion
-                                      ? 'Cotización'
-                                      : 'Factura de servicio',
-                                  style: const TextStyle(
-                                      color: AppTheme.textPrimary,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryLight
+                                      .withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(orden.estado.label,
+                                    style: const TextStyle(
+                                        color: AppTheme.primaryLight,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold)),
+                              ),
                             ],
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color:
-                                AppTheme.primaryLight.withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(orden.estado.label,
-                              style: const TextStyle(
-                                  color: AppTheme.primaryLight,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -186,9 +168,13 @@ class FacturaPreviewSheet extends StatelessWidget {
                       spacing: 16,
                       runSpacing: 8,
                       children: [
-                        _buildFacturaMeta('ORDEN', orden.numeroOrden),
-                        _buildFacturaMeta('FECHA',
-                            DateTime.now().toLocal().toString().split('.')[0]),
+                        _buildFacturaMeta(
+                            orden.esCotizacion ? 'COTIZACIÓN' : 'ORDEN',
+                            orden.numeroOrden),
+                        _buildFacturaMeta(
+                            'FECHA',
+                            DateFormat('dd/MM/yyyy HH:mm')
+                                .format(DateTime.now())),
                       ],
                     ),
                     const SizedBox(height: AppTheme.spacingMd),
@@ -288,6 +274,7 @@ class FacturaPreviewSheet extends StatelessWidget {
               ),
               const SizedBox(height: AppTheme.spacingMd),
               Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ElevatedButton.icon(
                     onPressed: () async {
@@ -464,3 +451,17 @@ class FacturaPreviewSheet extends StatelessWidget {
 }
 
 /// Selector modal para buscar y añadir repuestos a la orden de servicio.
+
+class _LogoVacio extends StatelessWidget {
+  const _LogoVacio();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 64,
+      height: 64,
+      child: Icon(Icons.storefront_outlined,
+          size: 32, color: AppTheme.textTertiary),
+    );
+  }
+}

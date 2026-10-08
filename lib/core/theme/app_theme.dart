@@ -1,75 +1,75 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Sistema de diseño centralizado — Estética Invoice Fly Premium.
+/// Sistema de diseño de Mecanix: estética de taller.
 ///
-/// Paleta oscura sofisticada con acentos vibrantes.
-/// Tipografía Inter para máxima legibilidad en listas de inventario.
+/// Grafito neutro (no azul marino) con un naranja de competición como único
+/// acento, tipografía condensada de rotulación para títulos y cifras, y
+/// superficies planas con borde fino: sin degradados ni resplandores.
+///
+/// El naranja de relleno ([primary]) es más oscuro que el de texto
+/// ([primaryLight]) a propósito: con texto blanco encima da 4,5:1, y el claro
+/// se lee bien sobre el fondo oscuro. No intercambiarlos.
 class AppTheme {
   AppTheme._();
 
   // ── Colores Base ──────────────────────────────
-  static const Color background = Color(0xFF0B0E14);
-  static const Color surface = Color(0xFF151921);
-  static const Color surfaceLight = Color(0xFF1E2433);
-  static const Color surfaceBorder = Color(0xFF2A3141);
+  static const Color background = Color(0xFF0F1012);
+  static const Color surface = Color(0xFF18191C);
+  static const Color surfaceLight = Color(0xFF222428);
+  static const Color surfaceBorder = Color(0xFF2E3136);
 
   // ── Colores de Acento ─────────────────────────
-  static const Color primary = Color(0xFF3B82F6);
-  static const Color primaryLight = Color(0xFF60A5FA);
-  static const Color primaryDark = Color(0xFF2563EB);
-  static const Color primarySurface = Color(0xFF1E3A5F);
+  static const Color primary = Color(0xFFC8500E);
+  static const Color primaryLight = Color(0xFFFF8A45);
+  static const Color primaryDark = Color(0xFFA3410B);
+  static const Color primarySurface = Color(0xFF33200F);
 
   // ── Colores Semánticos ────────────────────────
-  static const Color success = Color(0xFF10B981);
-  static const Color successSurface = Color(0xFF0D3B2E);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color warningSurface = Color(0xFF3D2E0A);
-  static const Color error = Color(0xFFEF4444);
-  static const Color errorSurface = Color(0xFF3D1515);
+  static const Color success = Color(0xFF2FBF71);
+  static const Color successSurface = Color(0xFF11301F);
+  static const Color warning = Color(0xFFF5B82E);
+  static const Color warningSurface = Color(0xFF3A2D0D);
+  static const Color error = Color(0xFFF0524F);
+  static const Color errorSurface = Color(0xFF3B1716);
 
   // ── Texto ─────────────────────────────────────
-  static const Color textPrimary = Color(0xFFF1F5F9);
-  static const Color textSecondary = Color(0xFF94A3B8);
-  static const Color textTertiary = Color(0xFF64748B);
-  static const Color textInverse = Color(0xFF0F172A);
+  static const Color textPrimary = Color(0xFFF4F2EE);
+  static const Color textSecondary = Color(0xFFA9ABAE);
+  static const Color textTertiary = Color(0xFF75787D);
+  static const Color textInverse = Color(0xFF111111);
 
-  // ── Gradientes ────────────────────────────────
+  // ── Degradados ────────────────────────────────
+  // Se conservan los nombres porque varias pantallas los usan, pero ya no
+  // mezclan tonos: son el mismo naranja con un poco de profundidad.
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [primary, Color(0xFF8B5CF6)],
+    colors: [primary, primaryDark],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient scannerGradient = LinearGradient(
-    colors: [Color(0xFF06B6D4), Color(0xFF3B82F6)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  static const LinearGradient scannerGradient = primaryGradient;
 
-  // ── Gradientes por Estado de Orden ────────────────
-  static const List<Color> gradientIngresada = [
-    Color(0xFF3B82F6),
-    Color(0xFF06B6D4)
-  ];
+  // ── Colores por Estado de Orden ───────────────────
+  static const Color colorIngresada = Color(0xFF5B8DEF);
+  static const Color colorDiagnostico = Color(0xFFF5B82E);
+  static const Color colorReparacion = Color(0xFFFF8A45);
+  static const Color colorLista = Color(0xFF2FBF71);
+  static const Color colorEntregada = Color(0xFF8A8F98);
+
+  static const List<Color> gradientIngresada = [colorIngresada, colorIngresada];
   static const List<Color> gradientDiagnostico = [
-    Color(0xFFF59E0B),
-    Color(0xFFF97316)
+    colorDiagnostico,
+    colorDiagnostico
   ];
   static const List<Color> gradientReparacion = [
-    Color(0xFFF97316),
-    Color(0xFFEF4444)
+    colorReparacion,
+    colorReparacion
   ];
-  static const List<Color> gradientLista = [
-    Color(0xFF10B981),
-    Color(0xFF059669)
-  ];
-  static const List<Color> gradientEntregada = [
-    Color(0xFF8B5CF6),
-    Color(0xFF6366F1)
-  ];
+  static const List<Color> gradientLista = [colorLista, colorLista];
+  static const List<Color> gradientEntregada = [colorEntregada, colorEntregada];
 
-  /// Retorna la lista de colores del gradiente según el estado.
+  /// Colores del estado (dos iguales: el estado se pinta plano).
   static List<Color> gradientForEstado(String estadoValue) {
     final val = estadoValue.trim().toLowerCase();
     switch (val) {
@@ -92,10 +92,10 @@ class AppTheme {
   }
 
   // ── Radios ────────────────────────────────────
-  static const double radiusSm = 8.0;
-  static const double radiusMd = 12.0;
-  static const double radiusLg = 16.0;
-  static const double radiusXl = 24.0;
+  static const double radiusSm = 6.0;
+  static const double radiusMd = 10.0;
+  static const double radiusLg = 14.0;
+  static const double radiusXl = 20.0;
 
   // ── Espaciado ─────────────────────────────────
   static const double spacingXs = 4.0;
@@ -107,96 +107,67 @@ class AppTheme {
   // ── Sombras ───────────────────────────────────
   static List<BoxShadow> get cardShadow => [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.2),
-          blurRadius: 12,
-          offset: const Offset(0, 4),
+          color: Colors.black.withValues(alpha: 0.25),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
         ),
       ];
 
-  static List<BoxShadow> get elevatedShadow => [
-        BoxShadow(
-          color: primary.withValues(alpha: 0.3),
-          blurRadius: 20,
-          offset: const Offset(0, 8),
-        ),
-      ];
+  static List<BoxShadow> get elevatedShadow => cardShadow;
 
   // ── Decoraciones Reutilizables ────────────────
-  // Las tarjetas llevan un degradado muy leve y una sombra suave: sobre un
-  // fondo oscuro plano, un relleno de un solo tono las hace desaparecer.
   static BoxDecoration get cardDecoration => BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            surface,
-            Color.lerp(surface, surfaceLight, 0.45) ?? surface,
-          ],
-        ),
+        color: surface,
         borderRadius: BorderRadius.circular(radiusLg),
         border: Border.all(color: surfaceBorder, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
       );
 
   static BoxDecoration get elevatedCardDecoration => BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.lerp(surface, surfaceLight, 0.25) ?? surface,
-            surface,
-          ],
-        ),
+        color: surface,
         borderRadius: BorderRadius.circular(radiusLg),
         border: Border.all(color: surfaceBorder, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-          BoxShadow(
-            color: primary.withValues(alpha: 0.06),
-            blurRadius: 30,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: cardShadow,
       );
 
-  /// Glassmorphic card decoration for premium overlays.
   static BoxDecoration glassDecoration({
     double opacity = 0.08,
     double borderOpacity = 0.2,
-    double radius = 24,
+    double radius = 20,
   }) =>
       BoxDecoration(
-        color: Colors.white.withValues(alpha: opacity),
+        color: surface,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: borderOpacity),
-          width: 1.2,
-        ),
+        border: Border.all(color: surfaceBorder, width: 1),
       );
 
   // ── Theme Data ────────────────────────────────
   static ThemeData get darkTheme {
-    final base = GoogleFonts.interTextTheme().apply(
+    final cuerpo = GoogleFonts.barlowTextTheme().apply(
       bodyColor: textPrimary,
       displayColor: textPrimary,
     );
-    // Títulos ligeramente más apretados: en tipografías geométricas como Inter
-    // el interletrado por defecto se ve suelto en encabezados grandes.
-    final textTheme = base.copyWith(
-      headlineLarge: base.headlineLarge?.copyWith(letterSpacing: -0.5),
-      headlineMedium: base.headlineMedium?.copyWith(letterSpacing: -0.4),
-      titleLarge: base.titleLarge?.copyWith(letterSpacing: -0.3),
-      titleMedium: base.titleMedium?.copyWith(letterSpacing: -0.2),
+    // Títulos, pestañas y botones en la condensada: se lee como la rotulación
+    // de un taller y deja caber más en una pantalla de 360 px.
+    TextStyle? condensada(TextStyle? base, FontWeight peso,
+            {double espaciado = 0}) =>
+        GoogleFonts.barlowCondensed(textStyle: base).copyWith(
+          fontWeight: peso,
+          letterSpacing: espaciado,
+        );
+    final textTheme = cuerpo.copyWith(
+      displayLarge: condensada(cuerpo.displayLarge, FontWeight.w700),
+      displayMedium: condensada(cuerpo.displayMedium, FontWeight.w700),
+      displaySmall: condensada(cuerpo.displaySmall, FontWeight.w700),
+      headlineLarge: condensada(cuerpo.headlineLarge, FontWeight.w700),
+      headlineMedium: condensada(cuerpo.headlineMedium, FontWeight.w700),
+      headlineSmall: condensada(cuerpo.headlineSmall, FontWeight.w700),
+      titleLarge: condensada(cuerpo.titleLarge, FontWeight.w700),
+      titleMedium: condensada(cuerpo.titleMedium, FontWeight.w600,
+          espaciado: 0.2),
+      titleSmall:
+          condensada(cuerpo.titleSmall, FontWeight.w600, espaciado: 0.3),
+      labelLarge:
+          condensada(cuerpo.labelLarge, FontWeight.w700, espaciado: 0.6),
     );
 
     return ThemeData(
@@ -210,20 +181,22 @@ class AppTheme {
         surface: surface,
         error: error,
         onPrimary: Colors.white,
-        onSecondary: Colors.white,
+        onSecondary: textInverse,
         onSurface: textPrimary,
         onError: Colors.white,
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: background.withValues(alpha: 0.85),
+        backgroundColor: background,
         elevation: 0,
         scrolledUnderElevation: 0,
+        titleSpacing: spacingMd,
         titleTextStyle: textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.w700,
           color: textPrimary,
-          fontSize: 20,
+          fontSize: 25,
+          letterSpacing: 0.2,
         ),
         iconTheme: const IconThemeData(color: textPrimary),
+        actionsIconTheme: const IconThemeData(color: textSecondary),
       ),
       cardTheme: CardThemeData(
         color: surface,
@@ -246,9 +219,13 @@ class AppTheme {
         filled: true,
         fillColor: surfaceLight,
         hintStyle: textTheme.bodyMedium?.copyWith(color: textTertiary),
+        labelStyle: textTheme.bodyMedium?.copyWith(color: textSecondary),
+        floatingLabelStyle:
+            textTheme.bodyMedium?.copyWith(color: primaryLight),
+        prefixIconColor: textTertiary,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: spacingMd,
-          vertical: spacingSm + 4,
+          vertical: spacingSm + 6,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
@@ -260,15 +237,17 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: const BorderSide(color: primary, width: 1.5),
+          borderSide: const BorderSide(color: primaryLight, width: 1.5),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: primary,
         foregroundColor: Colors.white,
-        elevation: 8,
+        elevation: 2,
+        highlightElevation: 4,
+        extendedTextStyle: textTheme.labelLarge?.copyWith(fontSize: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radiusLg),
+          borderRadius: BorderRadius.circular(radiusMd),
         ),
       ),
       // Botones consistentes en toda la app: misma altura, mismo radio y
@@ -280,28 +259,23 @@ class AppTheme {
           disabledBackgroundColor: surfaceLight,
           disabledForegroundColor: textTertiary,
           elevation: 0,
-          minimumSize: const Size(0, 48),
+          minimumSize: const Size(0, 50),
           padding: const EdgeInsets.symmetric(horizontal: spacingMd),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusMd),
           ),
-          textStyle: textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.3,
-          ),
+          textStyle: textTheme.labelLarge?.copyWith(fontSize: 16),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: primaryLight,
-          minimumSize: const Size(0, 46),
+          minimumSize: const Size(0, 48),
           side: const BorderSide(color: surfaceBorder),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusMd),
           ),
-          textStyle: textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: textTheme.labelLarge?.copyWith(fontSize: 15),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -311,15 +285,36 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusSm),
           ),
+          textStyle: textTheme.labelLarge?.copyWith(fontSize: 15),
         ),
       ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(foregroundColor: textSecondary),
+      ),
       tabBarTheme: TabBarThemeData(
-        labelColor: primaryLight,
+        labelColor: textPrimary,
         unselectedLabelColor: textTertiary,
+        indicatorColor: primaryLight,
         indicatorSize: TabBarIndicatorSize.label,
-        dividerColor: Colors.transparent,
-        labelStyle: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-        unselectedLabelStyle: textTheme.titleSmall,
+        dividerColor: surfaceBorder,
+        labelStyle: textTheme.titleSmall?.copyWith(fontSize: 17),
+        unselectedLabelStyle: textTheme.titleSmall?.copyWith(fontSize: 17),
+      ),
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: surface,
+        selectedItemColor: primaryLight,
+        unselectedItemColor: textTertiary,
+        elevation: 0,
+        selectedLabelStyle: textTheme.titleSmall?.copyWith(fontSize: 13),
+        unselectedLabelStyle: textTheme.titleSmall?.copyWith(fontSize: 13),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected) ? Colors.white : textTertiary),
+        trackColor: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected) ? primary : surfaceLight),
+        trackOutlineColor: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected) ? primary : surfaceBorder),
       ),
       dividerTheme: const DividerThemeData(
         color: surfaceBorder,
@@ -345,18 +340,20 @@ class AppTheme {
         ),
         behavior: SnackBarBehavior.floating,
         insetPadding: const EdgeInsets.all(spacingMd),
-        elevation: 6,
+        elevation: 2,
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: surface,
+        titleTextStyle: textTheme.titleLarge?.copyWith(fontSize: 22),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusLg),
+          side: const BorderSide(color: surfaceBorder),
         ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(radiusXl)),
         ),
         dragHandleColor: textTertiary,
         showDragHandle: true,

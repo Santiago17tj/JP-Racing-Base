@@ -135,12 +135,16 @@ class CategoryFilter extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(cat.icon, style: const TextStyle(fontSize: 13)),
+            Icon(cat.iconData,
+                size: 15,
+                color: isSelected
+                    ? AppTheme.primaryLight
+                    : AppTheme.textTertiary),
             const SizedBox(width: 6),
             Text(
               cat.label,
               style: TextStyle(
-                color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+                color: isSelected ? AppTheme.primaryLight : AppTheme.textSecondary,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),

@@ -125,10 +125,10 @@ class AuthProvider extends ChangeNotifier {
   String? _error;
   String? get error => _error;
 
+  // Sin sesión devuelve `null`, nunca un usuario inventado: el antiguo
+  // 'demo-user' abría un taller falso con id no-UUID cuyos datos jamás subían.
   String? get currentUserId {
-    if (!SupabaseService.isConfigured || SupabaseService.client.auth.currentUser == null) {
-      return 'demo-user';
-    }
+    if (!SupabaseService.isConfigured) return null;
     return SupabaseService.client.auth.currentUser?.id;
   }
 

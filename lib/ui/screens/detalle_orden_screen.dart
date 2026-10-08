@@ -6,6 +6,7 @@ import '../widgets/factura_preview_sheet.dart';
 import '../widgets/selector_repuestos_modal.dart';
 import 'editar_orden_screen.dart';
 import '../../core/theme/app_theme.dart';
+import '../widgets/placa_moto.dart';
 import '../../core/constants/enums.dart';
 import '../../data/models/orden_mantenimiento.dart';
 import '../../data/models/cliente.dart';
@@ -68,13 +69,12 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
     setState(() => _cargandoItems = true);
     final provider = context.read<OrdenesProvider>();
     final items = await provider.obtenerItemsOrden(_ordenActual.id);
-    // Recargar datos actualizados de la orden en la BD
-    final ordenDb = await provider
-        .obtenerVehiculoDeOrden(_ordenActual.vehiculoId)
-        .then((_) => provider.obtenerClienteDeOrden(_ordenActual.clienteId))
-        .then((_) => provider.ordenesActivas.firstWhere(
-            (o) => o.id == _ordenActual.id,
-            orElse: () => _ordenActual));
+    // Se relee por id: buscarla entre las activas fallaba al entregarla, y la
+    // pantalla seguía mostrando el estado anterior como si no se hubiera
+    // guardado.
+    final ordenDb =
+        await provider.obtenerOrden(_ordenActual.id) ?? _ordenActual;
+    if (!mounted) return;
     setState(() {
       _items = items;
       _ordenActual = ordenDb;
@@ -162,11 +162,111 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
   }
 
   Future<void> _cambiarEstado(EstadoOrden? nuevoEstado) async {
-    if (nuevoEstado == null) return;
+    if (nuevoEstado == null || nuevoEstado == _ordenActual.estado) return;
     final provider = context.read<OrdenesProvider>();
     HapticFeedback.mediumImpact();
+
+    // Al entregar con saldo se pregunta por el cobro: cambiar el estado no
+    // mueve la caja, y sin esto el dinero cobrado en el mostrador no quedaba
+    // registrado en ningún sitio.
+    if (nuevoEstado == EstadoOrden.entregada && !_ordenActual.esCotizacion) {
+      final porcentaje = context
+              .read<TallerProvider>()
+              .taller
+              ?.porcentajeImpuestoDefecto ??
+          0.0;
+      final saldo = _ordenActual.saldoPendienteConImpuesto(porcentaje);
+      if (saldo > 0) {
+        final metodo = await _preguntarCobroAlEntregar(saldo);
+        if (metodo == null) return; // canceló: la orden sigue como estaba
+        if (metodo != _sinCobrar) {
+          try {
+            await provider.registrarAbono(
+              ordenId: _ordenActual.id,
+              monto: saldo,
+              metodoPago: metodo,
+              porcentajeImpuesto: porcentaje,
+              notas: 'Pago al entregar',
+            );
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('No se pudo registrar el pago: $e'),
+              backgroundColor: AppTheme.error,
+            ));
+            return;
+          }
+        }
+      }
+    }
+
     await provider.cambiarEstadoOrden(_ordenActual.id, nuevoEstado);
     _cargarItems();
+  }
+
+  static const _sinCobrar = '__sin_cobrar__';
+
+  /// Devuelve el método de pago elegido, [_sinCobrar] si se entrega debiendo,
+  /// o `null` si se cancela.
+  Future<String?> _preguntarCobroAlEntregar(double saldo) {
+    String metodo = 'efectivo';
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Entregar la moto'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Queda por cobrar',
+                  style: TextStyle(color: AppTheme.textSecondary)),
+              const SizedBox(height: 4),
+              Text(
+                CurrencyFormatter.format(saldo),
+                style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                      color: AppTheme.warning,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: metodo,
+                dropdownColor: AppTheme.surface,
+                decoration: const InputDecoration(labelText: 'Método de Pago'),
+                items: const [
+                  DropdownMenuItem(value: 'efectivo', child: Text('Efectivo')),
+                  DropdownMenuItem(
+                      value: 'transferencia',
+                      child: Text('Transferencia Bancaria')),
+                  DropdownMenuItem(
+                      value: 'nequi', child: Text('Nequi / Daviplata')),
+                  DropdownMenuItem(
+                      value: 'tarjeta', child: Text('Tarjeta Débito/Crédito')),
+                ],
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => metodo = v);
+                },
+              ),
+            ],
+          ),
+          actionsOverflowButtonSpacing: 4,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, _sinCobrar),
+              child: const Text('Entregar sin cobrar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, metodo),
+              child: const Text('Cobrar y entregar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Diálogo para agregar concepto de mano de obra
@@ -265,15 +365,16 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Verificar si el estado es LISTA_PARA_ENTREGA para el botón de facturación
     // La factura se habilita cuando la moto está lista y sigue disponible
-    // después de entregada, para poder reimprimirla desde el historial.
-    final esListo = _ordenActual.estado == EstadoOrden.listaParaEntrega ||
+    // después de entregada, para poder reimprimirla desde el historial. Una
+    // cotización se manda al cliente antes de trabajar, así que siempre.
+    final esListo = _ordenActual.esCotizacion ||
+        _ordenActual.estado == EstadoOrden.listaParaEntrega ||
         _ordenActual.estado == EstadoOrden.entregada;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Taller - Detalle de Orden'),
+        title: Text(_ordenActual.numeroOrden),
         actions: [
           IconButton(
             icon: const Icon(Icons.chat_rounded, color: AppTheme.success),
@@ -293,31 +394,6 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
               if (mounted) _cargarItems();
             },
           ),
-          // Selector de Estado de la Orden
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: DropdownButton<EstadoOrden>(
-              value: _ordenActual.estado,
-              dropdownColor: AppTheme.surface,
-              underline: const SizedBox(),
-              icon: const Icon(Icons.arrow_drop_down,
-                  color: AppTheme.primaryLight),
-              items: EstadoOrden.values.map((estado) {
-                return DropdownMenuItem(
-                  value: estado,
-                  child: Text(
-                    estado.label,
-                    style: TextStyle(
-                      color: Color(estado.colorValue),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                );
-              }).toList(),
-              onChanged: _cambiarEstado,
-            ),
-          ),
         ],
       ),
       body: _cargandoItems
@@ -325,6 +401,8 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
           : ListView(
               padding: const EdgeInsets.all(AppTheme.spacingMd),
               children: [
+                _buildSelectorEstado(),
+                const SizedBox(height: AppTheme.spacingSm + 4),
                 // ── SECCIÓN 1: CABECERA Y DATOS GENERALES ──
                 _buildHeaderCard(),
                 const SizedBox(height: AppTheme.spacingMd),
@@ -342,6 +420,63 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                 const SizedBox(height: AppTheme.spacingXl),
               ],
             ),
+    );
+  }
+
+  /// El estado de la orden, a la vista y a un toque: antes vivía comprimido
+  /// en la barra superior y le quitaba el sitio al número de la orden.
+  Widget _buildSelectorEstado() {
+    final color = Color(_ordenActual.estado.colorValue);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 4, 8, 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'ESTADO',
+            style: TextStyle(
+              color: AppTheme.textTertiary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButton<EstadoOrden>(
+              value: _ordenActual.estado,
+              isExpanded: true,
+              dropdownColor: AppTheme.surface,
+              underline: const SizedBox(),
+              icon: Icon(Icons.expand_more_rounded, color: color),
+              items: EstadoOrden.values.map((estado) {
+                return DropdownMenuItem(
+                  value: estado,
+                  child: Text(
+                    estado.label,
+                    style: TextStyle(
+                      color: Color(estado.colorValue),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                );
+              }).toList(),
+              onChanged: _cambiarEstado,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -369,20 +504,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                    color: AppTheme.surfaceLight,
-                    borderRadius: BorderRadius.circular(4)),
-                child: Text(
-                  widget.vehiculo.placaPatente,
-                  style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: AppTheme.textSecondary),
-                ),
-              ),
+              PlacaMoto(widget.vehiculo.placaPatente, tamano: 16),
             ],
           ),
           const SizedBox(height: AppTheme.spacingSm),
@@ -604,7 +726,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '⚙️ Mano de Obra Acumulada',
+                        'Mano de Obra Acumulada',
                         style: TextStyle(
                             color: AppTheme.textPrimary,
                             fontSize: 13,
@@ -780,7 +902,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
               const Padding(
                 padding: EdgeInsets.only(top: 8),
                 child: Text(
-                  '💡 El stock del repuesto será restaurado al inventario.',
+                  'El stock del repuesto volverá al inventario.',
                   style: TextStyle(color: AppTheme.success, fontSize: 11),
                 ),
               ),
@@ -1028,7 +1150,9 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
               onPressed: esListo
                   ? () {
                       HapticFeedback.mediumImpact();
-                      if (AppConfig.facturacionElectronicaActiva) {
+                      // Una cotización nunca va a la DIAN.
+                      if (AppConfig.facturacionElectronicaActiva &&
+                          !_ordenActual.esCotizacion) {
                         // El aviso se resuelve cuando la DIAN responde, que
                         // puede ser mucho después: se captura el messenger
                         // ahora, mientras la pantalla existe con seguridad.
@@ -1065,9 +1189,11 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                     }
                   : null,
               icon: const Icon(Icons.receipt_long_rounded, color: Colors.white),
-              label: const Text(
-                'GENERAR FACTURA INVOICE FLY',
-                style: TextStyle(
+              label: Text(
+                _ordenActual.esCotizacion
+                    ? 'GENERAR COTIZACIÓN'
+                    : 'GENERAR FACTURA',
+                style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                     letterSpacing: 0.5),
@@ -1084,7 +1210,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
           if (!esListo) ...[
             const SizedBox(height: 8),
             const Text(
-              'Nota: Cambie el estado de la orden a "Lista para Entrega" en el selector superior para habilitar la facturación rápida.',
+              'La factura se habilita cuando la orden pasa a «Lista para Entrega» (selector de arriba).',
               style: TextStyle(color: AppTheme.textTertiary, fontSize: 10),
               textAlign: TextAlign.center,
             ),
@@ -1182,7 +1308,7 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
             child: OutlinedButton.icon(
               onPressed: () => _mostrarDialogoAbono(),
               icon: const Icon(Icons.payments_rounded, size: 18),
-              label: const Text('💵 Registrar Abono / Anticipo'),
+              label: const Text('Registrar Abono / Anticipo'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.primaryLight,
                 side: const BorderSide(color: AppTheme.primaryLight),
@@ -1365,13 +1491,10 @@ class _DetalleOrdenScreenState extends State<DetalleOrdenScreen> {
                         : notasCtrl.text.trim(),
                   );
 
-                  final ordenes = provider.ordenesActivas;
-                  final idx =
-                      ordenes.indexWhere((o) => o.id == _ordenActual.id);
-                  if (idx != -1) {
-                    setState(() {
-                      _ordenActual = ordenes[idx];
-                    });
+                  final actualizada =
+                      await provider.obtenerOrden(_ordenActual.id);
+                  if (actualizada != null && mounted) {
+                    setState(() => _ordenActual = actualizada);
                   }
 
                   if (mounted) {

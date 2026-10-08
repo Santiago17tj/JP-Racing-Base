@@ -44,17 +44,7 @@ class TallerProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (usuarioId == 'demo-user') {
-        _taller = PerfilTaller(
-          id: 'taller-demo',
-          usuarioAdministradorId: 'demo-user',
-          nombreTaller: 'Taller Demo (Local)',
-          moneda: 'COP',
-          porcentajeImpuestoDefecto: 0.0,
-        );
-        _hasWorkshop = true;
-        DatabaseHelper.activeTallerId = 'taller-demo';
-      } else {
+      {
         // Obtener el UID directamente de la sesión activa.
         // En instalación limpia, este es el único identificador fiable.
         final String uid = SupabaseService.isConfigured

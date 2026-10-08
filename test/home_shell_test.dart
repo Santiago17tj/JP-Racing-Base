@@ -108,7 +108,7 @@ void main() {
     expect(find.byType(BottomNavigationBar), findsOneWidget);
     expect(find.text('Servicios'), findsOneWidget);
     expect(find.text('Inventario'), findsOneWidget);
-    expect(find.text('Cloud'), findsOneWidget);
+    expect(find.text('Caja'), findsOneWidget);
     expect(find.text('Ajustes'), findsOneWidget);
   });
 
@@ -141,5 +141,31 @@ void main() {
     expect(find.byType(OrdenesActivasScreen, skipOffstage: false),
         findsOneWidget,
         reason: 'sigue montada aunque no se vea');
+  });
+
+  testWidgets('en modo mecánico la caja no aparece en la barra',
+      (tester) async {
+    // La caja enseña ingresos, gastos y ganancia: es información del dueño.
+    tallerProvider.setTaller(PerfilTaller(
+      usuarioAdministradorId: 'admin',
+      nombreTaller: 'JP.RACING.315',
+    ));
+    await sesionProvider.activarModoMecanico();
+    await montar(tester);
+
+    expect(find.text('Caja'), findsNothing);
+    expect(find.text('Servicios'), findsOneWidget);
+    expect(find.text('Ajustes'), findsOneWidget);
+  });
+
+  testWidgets('sin sesión no se inventa un taller: se ofrece volver a entrar',
+      (tester) async {
+    // Antes caía en un «Taller Demo (Local)» con id `taller-demo`, que no es
+    // UUID: lo que se creara allí no subía nunca a la nube.
+    await montar(tester);
+
+    expect(find.text('Volver a iniciar sesión'), findsOneWidget);
+    expect(tallerProvider.taller, isNull);
+    expect(find.byType(BottomNavigationBar), findsNothing);
   });
 }

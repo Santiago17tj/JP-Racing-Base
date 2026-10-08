@@ -292,7 +292,7 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.close_rounded).first);
       await tester.pumpAndSettle();
-      expect(find.textContaining('El stock del repuesto será restaurado'),
+      expect(find.textContaining('El stock del repuesto volverá'),
           findsOneWidget);
       await tester.tap(find.widgetWithText(ElevatedButton, 'Eliminar'));
       await tester.pumpAndSettle();
@@ -359,7 +359,7 @@ void main() {
       );
       await montar(tester, orden);
 
-      await tester.tap(find.text('💵 Registrar Abono / Anticipo'));
+      await tester.tap(find.text('Registrar Abono / Anticipo'));
       await tester.pumpAndSettle();
 
       // El diálogo debe partir del saldo con impuesto, no del guardado.
@@ -392,7 +392,7 @@ void main() {
       final orden = crearOrden(costoManoObra: 100000);
       await montar(tester, orden);
 
-      await tester.tap(find.text('💵 Registrar Abono / Anticipo'));
+      await tester.tap(find.text('Registrar Abono / Anticipo'));
       await tester.pumpAndSettle();
       await tester.enterText(
         find
@@ -408,6 +408,115 @@ void main() {
       expect(db.caja, isEmpty);
       expect(find.text('Ingrese un monto válido mayor a 0'), findsOneWidget);
     });
+
+    testWidgets('un abono sobre una orden ya entregada también suma y entra en caja',
+        (tester) async {
+      // Antes se buscaba la orden solo entre las activas: el abono se guardaba
+      // pero no sumaba al monto pagado ni entraba a la caja, sin avisar.
+      final orden = crearOrden(
+        costoManoObra: 100000,
+        estado: EstadoOrden.entregada,
+      );
+      await montar(tester, orden);
+
+      await tester.tap(find.text('Registrar Abono / Anticipo'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find
+            .descendant(
+                of: find.byType(AlertDialog), matching: find.byType(TextField))
+            .first,
+        '50000',
+      );
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar Abono'));
+      await tester.pumpAndSettle();
+
+      final guardada = db.ordenPorId(orden.id);
+      expect(guardada.montoPagado, 50000);
+      // 100.000 + 19% de IVA = 119.000; menos 50.000.
+      expect(guardada.saldoPendiente, 69000);
+      expect(db.caja.single.monto, 50000);
+    });
+  });
+
+  group('entregar la moto', () {
+    Future<void> elegirEstado(WidgetTester tester, EstadoOrden estado) async {
+      await tester.tap(find.byType(DropdownButton<EstadoOrden>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(estado.label).last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('con saldo pregunta y, al cobrar, el pago entra en caja',
+        (tester) async {
+      // Cambiar el estado no mueve la caja: sin esta pregunta, el dinero
+      // cobrado en el mostrador no quedaba registrado en ningún sitio.
+      final orden = crearOrden(
+        subtotalRepuestos: 850000,
+        costoManoObra: 250000,
+        montoPagado: 15000,
+      );
+      await montar(tester, orden);
+
+      await elegirEstado(tester, EstadoOrden.entregada);
+
+      expect(find.text('Entregar la moto'), findsOneWidget);
+      expect(find.text(pesos(1132500)), findsWidgets);
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Cobrar y entregar'));
+      await tester.pumpAndSettle();
+
+      final guardada = db.ordenPorId(orden.id);
+      expect(guardada.estado, EstadoOrden.entregada);
+      expect(guardada.montoPagado, 1147500);
+      expect(guardada.estadoPago, 'pagado');
+      expect(db.caja.single.monto, 1132500);
+      expect(db.caja.single.tipo, 'ingreso');
+      expect(db.abonos.single.notas, 'Pago al entregar');
+
+      // La pantalla muestra el estado nuevo: antes se quedaba en el anterior.
+      final selector = tester.widget<DropdownButton<EstadoOrden>>(
+          find.byType(DropdownButton<EstadoOrden>));
+      expect(selector.value, EstadoOrden.entregada);
+    });
+
+    testWidgets('entregar sin cobrar deja el saldo y no toca la caja',
+        (tester) async {
+      final orden = crearOrden(costoManoObra: 100000);
+      await montar(tester, orden);
+
+      await elegirEstado(tester, EstadoOrden.entregada);
+      await tester.tap(find.text('Entregar sin cobrar'));
+      await tester.pumpAndSettle();
+
+      final guardada = db.ordenPorId(orden.id);
+      expect(guardada.estado, EstadoOrden.entregada);
+      expect(guardada.montoPagado, 0);
+      expect(db.caja, isEmpty);
+    });
+
+    testWidgets('cancelar deja la orden como estaba', (tester) async {
+      final orden = crearOrden(costoManoObra: 100000);
+      await montar(tester, orden);
+
+      await elegirEstado(tester, EstadoOrden.entregada);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      expect(db.ordenPorId(orden.id).estado, EstadoOrden.enReparacion);
+      expect(db.caja, isEmpty);
+    });
+
+    testWidgets('sin saldo no pregunta nada', (tester) async {
+      final orden = crearOrden(costoManoObra: 100000, montoPagado: 119000);
+      await montar(tester, orden);
+
+      await elegirEstado(tester, EstadoOrden.entregada);
+
+      expect(find.text('Entregar la moto'), findsNothing);
+      expect(db.ordenPorId(orden.id).estado, EstadoOrden.entregada);
+      expect(db.caja, isEmpty);
+    });
   });
 
   group('facturación', () {
@@ -417,7 +526,7 @@ void main() {
       await montar(tester, orden);
 
       final boton = tester.widget<ElevatedButton>(find.widgetWithText(
-          ElevatedButton, 'GENERAR FACTURA INVOICE FLY'));
+          ElevatedButton, 'GENERAR FACTURA'));
       expect(boton.onPressed, isNull);
       expect(find.textContaining('Lista para Entrega'), findsWidgets);
     });
@@ -428,7 +537,7 @@ void main() {
       await montar(tester, orden);
 
       final boton = tester.widget<ElevatedButton>(find.widgetWithText(
-          ElevatedButton, 'GENERAR FACTURA INVOICE FLY'));
+          ElevatedButton, 'GENERAR FACTURA'));
       expect(boton.onPressed, isNotNull);
     });
   });

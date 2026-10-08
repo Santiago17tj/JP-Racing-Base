@@ -74,7 +74,7 @@ class DetalleRepuestoSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${repuesto.categoria.icon} ${repuesto.categoria.label.toUpperCase()}',
+                repuesto.categoria.label.toUpperCase(),
                 style: const TextStyle(
                   color: AppTheme.primaryLight,
                   fontSize: 11,

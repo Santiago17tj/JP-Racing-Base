@@ -239,7 +239,14 @@ class _AgregarRepuestoScreenState extends State<AgregarRepuestoScreen> {
                 items: CategoriaRepuesto.values
                     .map((c) => DropdownMenuItem(
                           value: c,
-                          child: Text('${c.icon}  ${c.label}'),
+                          child: Row(
+                            children: [
+                              Icon(c.iconData,
+                                  size: 18, color: AppTheme.textSecondary),
+                              const SizedBox(width: 10),
+                              Text(c.label),
+                            ],
+                          ),
                         ))
                     .toList(),
                 onChanged: (v) => setState(() => _categoria = v ?? CategoriaRepuesto.otros),

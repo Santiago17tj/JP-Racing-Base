@@ -347,6 +347,15 @@ void main() {
         DetalleOrdenScreen(orden: orden, cliente: cliente, vehiculo: moto),
       );
 
+      // Con el selector de estado encima de la cabecera, los totales quedan
+      // bajo el pliegue también en 800 px de alto.
+      await tester.scrollUntilVisible(
+        find.text('TOTAL ESTIMADO'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
       expect(find.text('TOTAL ESTIMADO'), findsOneWidget);
     }, skip: sinFuenteReal());
   });

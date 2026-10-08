@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../data/database/database_helper.dart';
 import '../../data/models/orden_mantenimiento.dart';
 import '../../data/models/perfil_taller.dart';
+import '../dominio/reglas_orden.dart';
 import '../utils/currency_formatter.dart';
 import 'pdf_web_helper_stub.dart'
     if (dart.library.html) 'pdf_web_helper.dart';
@@ -69,15 +70,33 @@ class RespaldoService {
   }
 
   /// Órdenes en CSV, listo para abrir en Excel.
-  static String construirCsvOrdenes(List<OrdenMantenimiento> ordenes) {
+  ///
+  /// Las cifras salen **como en la factura**: el total lleva el IVA de la mano
+  /// de obra y el saldo se calcula sobre ese total, por [ReglasOrden]. Antes
+  /// el total iba sin IVA y el saldo a veces con él y a veces sin él (según
+  /// hubiera habido abonos), así que Total − Abonado no daba el Saldo.
+  static String construirCsvOrdenes(
+    List<OrdenMantenimiento> ordenes, {
+    double porcentajeImpuesto = 0,
+  }) {
     String celda(Object? valor) {
       final texto = (valor ?? '').toString().replaceAll('"', '""');
       return '"$texto"';
     }
 
+    // Coma decimal y sin «.0»: con «120000.0» un Excel en español puede leer
+    // el punto como separador de miles.
+    String numero(double valor) {
+      final redondo = (valor * 100).round() / 100;
+      return redondo == redondo.roundToDouble()
+          ? redondo.toStringAsFixed(0)
+          : redondo.toStringAsFixed(2).replaceAll('.', ',');
+    }
+
     final filas = <String>[
       [
         'Numero',
+        'Tipo',
         'Estado',
         'Fecha ingreso',
         'Fecha entrega',
@@ -85,6 +104,7 @@ class RespaldoService {
         'Kilometraje',
         'Repuestos',
         'Mano de obra',
+        'IVA',
         'Total',
         'Abonado',
         'Saldo',
@@ -92,18 +112,22 @@ class RespaldoService {
     ];
 
     for (final o in ordenes) {
+      final total = o.totalConImpuesto(porcentajeImpuesto);
       filas.add([
         o.numeroOrden,
+        o.esCotizacion ? 'Cotizacion' : 'Orden',
         o.estado.label,
         o.fechaIngreso.toIso8601String().split('T').first,
         o.fechaEntrega?.toIso8601String().split('T').first ?? '',
         o.mecanicoAsignado ?? '',
         o.kilometrajeIngreso,
-        o.subtotalRepuestos,
-        o.costoManoObra,
-        o.totalEstimado,
-        o.montoPagado,
-        o.saldoPendiente,
+        numero(o.subtotalRepuestos),
+        numero(o.costoManoObra),
+        numero(o.impuestoManoObra(porcentajeImpuesto)),
+        numero(total),
+        numero(o.montoPagado),
+        numero(ReglasOrden.saldoPendiente(
+            total: total, montoPagado: o.montoPagado)),
       ].map(celda).join(';'));
     }
 
@@ -144,12 +168,14 @@ class RespaldoService {
   }
 
   /// Exporta solo las órdenes en CSV para llevarlas al contador.
-  static Future<int> exportarCsvOrdenes() async {
+  static Future<int> exportarCsvOrdenes(
+      {double porcentajeImpuesto = 0}) async {
     final activas = await _db.getOrdenesActivas();
     final historial = await _db.getHistorialOrdenes(limite: 100000);
     final ordenes = <OrdenMantenimiento>[...activas, ...historial];
 
-    final csv = construirCsvOrdenes(ordenes);
+    final csv = construirCsvOrdenes(ordenes,
+        porcentajeImpuesto: porcentajeImpuesto);
     // BOM para que Excel reconozca los acentos.
     final bytes = Uint8List.fromList([0xEF, 0xBB, 0xBF, ...utf8.encode(csv)]);
     final nombre =

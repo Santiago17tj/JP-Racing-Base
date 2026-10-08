@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../widgets/placa_moto.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/constants/enums.dart';
 import '../../data/models/orden_mantenimiento.dart';
@@ -96,9 +97,6 @@ class _OrdenesActivasScreenState extends State<OrdenesActivasScreen>
           controller: _tabController,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          indicatorColor: AppTheme.primary,
-          labelColor: AppTheme.primaryLight,
-          unselectedLabelColor: AppTheme.textTertiary,
           tabs: [
             ..._estadosTab.map((estado) {
               final count = provider.getOrdenesPorEstado(estado).length;
@@ -112,20 +110,16 @@ class _OrdenesActivasScreenState extends State<OrdenesActivasScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: AppTheme.gradientForEstado(
-                                estado.value.toLowerCase()),
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
+                          color: Color(estado.colorValue)
+                              .withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
                           '$count',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                          style: TextStyle(
+                            color: Color(estado.colorValue),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -389,6 +383,7 @@ class _OrdenCard extends StatelessWidget {
       // Determinar color de alerta de tiempo en el taller
       // Si lleva más de 3 días en el taller, advertencia
       final dias = orden.diasEnTaller;
+      final colorEstado = Color(orden.estado.colorValue);
       Color diasColor = AppTheme.textTertiary;
       if (dias >= 5) {
         diasColor = AppTheme.error;
@@ -409,175 +404,108 @@ class _OrdenCard extends StatelessWidget {
             ),
           );
         },
+        // Franja del color del estado a la izquierda: se distingue en qué
+        // punto va cada moto sin leer nada.
         child: Container(
-          margin: const EdgeInsets.only(bottom: AppTheme.spacingSm),
+          margin: const EdgeInsets.only(bottom: AppTheme.spacingSm + 2),
           decoration: AppTheme.cardDecoration,
-          child: Padding(
-            padding: const EdgeInsets.all(AppTheme.spacingMd),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          clipBehavior: Clip.antiAlias,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Cabecera: Consecutivo + Días
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      orden.numeroOrden,
-                      style: const TextStyle(
-                        color: AppTheme.primaryLight,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                    Row(
+                Container(width: 5, color: colorEstado),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.access_time_rounded,
-                            color: diasColor, size: 12),
-                        const SizedBox(width: 4),
+                        Row(
+                          children: [
+                            PlacaMoto(vehiculo.placaPatente, tamano: 15),
+                            const SizedBox(width: 10),
+                            Text(
+                              orden.numeroOrden,
+                              style: const TextStyle(
+                                color: AppTheme.textTertiary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const Spacer(),
+                            Icon(Icons.schedule_rounded,
+                                color: diasColor, size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              dias == 0
+                                  ? 'Ingresó hoy'
+                                  : 'Hace $dias ${dias == 1 ? 'día' : 'días'}',
+                              style: TextStyle(
+                                color: diasColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
                         Text(
-                          dias == 0
-                              ? 'Ingresó hoy'
-                              : 'Hace $dias ${dias == 1 ? 'día' : 'días'}',
-                          style: TextStyle(
-                            color: diasColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          '${vehiculo.marca} ${vehiculo.modelo}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontSize: 21, height: 1.1),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppTheme.spacingSm),
-
-                // Info de la Moto (Marca y Modelo)
-                Text(
-                  '${vehiculo.marca} ${vehiculo.modelo}',
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-
-                // Placa y Cliente
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceLight,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: AppTheme.surfaceBorder),
-                      ),
-                      child: Text(
-                        vehiculo.placaPatente,
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          color: AppTheme.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Dueño: ${cliente.nombreCompleto}',
-                        style: const TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 13,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const Divider(color: AppTheme.surfaceBorder, height: 24),
-
-                // Fila inferior: Mecánico y Tipo de Servicio
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.engineering_rounded,
-                            color: AppTheme.textTertiary, size: 14),
-                        const SizedBox(width: 6),
+                        const SizedBox(height: 2),
                         Text(
-                          orden.mecanicoAsignado ?? 'Sin asignar',
+                          'Dueño: ${cliente.nombreCompleto}',
                           style: const TextStyle(
                             color: AppTheme.textSecondary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Icon(Icons.engineering_outlined,
+                                color: AppTheme.textTertiary, size: 16),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                orden.mecanicoAsignado ?? 'Sin asignar',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const Text('  ·  ',
+                                style: TextStyle(color: AppTheme.textTertiary)),
+                            Expanded(
+                              child: Text(
+                                orden.tipoServicio,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppTheme.textTertiary,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    Expanded(
-                      child: Wrap(
-                        alignment: WrapAlignment.end,
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppTheme.surfaceLight,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppTheme.surfaceBorder),
-                            ),
-                            child: Text(
-                              orden.tipoServicio,
-                              style: const TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: AppTheme.gradientForEstado(
-                                    orden.estado.value.toLowerCase()),
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.gradientForEstado(
-                                          orden.estado.value.toLowerCase())
-                                      .first
-                                      .withValues(alpha: 0.3),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Text(
-                              orden.estado.label.toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                )
+                  ),
+                ),
               ],
             ),
           ),

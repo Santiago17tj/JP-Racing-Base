@@ -178,7 +178,13 @@ class _AjustesTallerScreenState extends State<AjustesTallerScreen> {
     setState(() => _exportando = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final total = await RespaldoService.exportarCsvOrdenes();
+      final total = await RespaldoService.exportarCsvOrdenes(
+        porcentajeImpuesto: context
+                .read<TallerProvider>()
+                .taller
+                ?.porcentajeImpuestoDefecto ??
+            0,
+      );
       messenger.showSnackBar(SnackBar(
         content: Text('$total ordenes exportadas a CSV.'),
         backgroundColor: AppTheme.success,

@@ -128,7 +128,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Inventario de Repuestos'),
+        title: const Text('Inventario'),
         actions: [
           // Botón venta rápida
           IconButton(
@@ -158,8 +158,8 @@ class _InventarioScreenState extends State<InventarioScreen> {
       ),
       body: Column(
         children: [
-          _buildHeaderPanel(provider),
           _buildQuickStats(provider),
+          _buildHeaderPanel(provider),
           Padding(
             padding: const EdgeInsets.fromLTRB(
                 AppTheme.spacingMd, AppTheme.spacingSm,
@@ -198,136 +198,182 @@ class _InventarioScreenState extends State<InventarioScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _abrirEscaner,
-        icon: const Icon(Icons.barcode_reader, color: Colors.white, size: 20),
-        label: const Text(
-          'Escáner',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        backgroundColor: AppTheme.primaryLight,
-        elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        ),
+        icon: const Icon(Icons.barcode_reader, size: 20),
+        label: const Text('Escáner'),
       ),
     );
   }
 
+  /// Franja de aviso: cuántos repuestos están bajo el mínimo. Tocarla filtra
+  /// la lista para ver solo esos.
   Widget _buildHeaderPanel(InventarioProvider provider) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(
-          AppTheme.spacingMd, AppTheme.spacingMd,
-          AppTheme.spacingMd, AppTheme.spacingSm),
-      padding: const EdgeInsets.all(AppTheme.spacingMd),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF111827), Color(0xFF1F2937)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.surfaceBorder, width: 1.2),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppTheme.primarySurface,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.storefront_rounded,
-                color: AppTheme.primaryLight, size: 24),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final bajos = provider.totalStockBajo;
+    final color = bajos > 0 ? AppTheme.warning : AppTheme.success;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppTheme.spacingMd, AppTheme.spacingSm, AppTheme.spacingMd, 0),
+      child: Material(
+        color: bajos > 0 ? AppTheme.warningSurface : AppTheme.successSurface,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          onTap: bajos > 0 ? provider.toggleStockBajo : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
               children: [
-                Text('Operación del taller',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.primaryLight)),
-                SizedBox(height: 2),
-                Text('Control de stock, rotación y repuestos críticos',
-                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                Icon(
+                    bajos > 0
+                        ? Icons.warning_amber_rounded
+                        : Icons.check_circle_outline_rounded,
+                    color: color,
+                    size: 18),
+                const SizedBox(width: 10),
+                Text(
+                  bajos > 0 ? '$bajos en revisión' : 'Stock estable',
+                  style: TextStyle(
+                      color: color, fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+                if (bajos > 0) ...[
+                  const SizedBox(width: 6),
+                  const Expanded(
+                    child: Text('· bajo el mínimo',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: AppTheme.textSecondary, fontSize: 13)),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: color, size: 20),
+                ],
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: provider.totalStockBajo > 0
-                  ? AppTheme.warningSurface
-                  : AppTheme.successSurface,
-              borderRadius: BorderRadius.circular(999),
-            ),
+        ),
+      ),
+    );
+  }
+
+  /// Tablero de bodega: cuántos repuestos hay, cuánto valen y, en la barra,
+  /// qué parte está bien, baja o agotada.
+  Widget _buildQuickStats(InventarioProvider provider) {
+    final repuestos = provider.repuestos;
+    final agotados = provider.sinStock;
+    final bajos =
+        repuestos.where((r) => r.stockBajo && r.stockActual > 0).length;
+    final bien = repuestos.length - agotados - bajos;
+    final textos = Theme.of(context).textTheme;
+
+    Widget cifra(String valor, String etiqueta, {Color? color}) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
             child: Text(
-              provider.totalStockBajo > 0
-                  ? '${provider.totalStockBajo} en revisión'
-                  : 'Stock estable',
-              style: TextStyle(
-                color: provider.totalStockBajo > 0
-                    ? AppTheme.warning
-                    : AppTheme.success,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+              valor,
+              maxLines: 1,
+              style: (textos.titleLarge ?? const TextStyle()).copyWith(
+                color: color ?? AppTheme.textPrimary,
+                fontSize: 26,
+                height: 1.05,
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickStats(InventarioProvider provider) {
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.spacingMd),
-      margin: const EdgeInsets.fromLTRB(
-          AppTheme.spacingMd, AppTheme.spacingSm,
-          AppTheme.spacingMd, AppTheme.spacingSm),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.surfaceBorder, width: 1),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-              child: _statItem('TOTAL REPUESTOS', '${provider.totalRepuestos}',
-                  valueColor: AppTheme.primaryLight)),
-          const SizedBox(width: 12),
-          Expanded(
-              child: _statItem('VALOR TOTAL',
-                  CurrencyFormatter.format(provider.valorInventario),
-                  valueColor: AppTheme.primaryLight)),
-          const SizedBox(width: 12),
-          Expanded(
-              child: _statItem('SIN STOCK', '${provider.sinStock}',
-                  valueColor:
-                      provider.sinStock > 0 ? AppTheme.error : AppTheme.success)),
-        ],
-      ),
-    );
-  }
-
-  Widget _statItem(String label, String value, {Color? valueColor}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
+          const SizedBox(height: 2),
+          Text(
+            etiqueta,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: AppTheme.textTertiary,
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8)),
-        const SizedBox(height: 2),
-        Text(value,
-            style: TextStyle(
-                color: valueColor ?? AppTheme.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.bold)),
-      ],
+              color: AppTheme.textTertiary,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ],
+      );
+    }
+
+    Widget separador() => Container(
+          width: 1,
+          height: 34,
+          margin: const EdgeInsets.symmetric(horizontal: 12),
+          color: AppTheme.surfaceBorder,
+        );
+
+    Widget tramo(int cantidad, Color color) => cantidad == 0
+        ? const SizedBox.shrink()
+        : Expanded(flex: cantidad, child: Container(color: color));
+
+    Widget leyenda(int cantidad, String texto, Color color) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 5),
+            Text('$cantidad $texto',
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 12)),
+          ],
+        );
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+          AppTheme.spacingMd, AppTheme.spacingSm, AppTheme.spacingMd, 0),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      decoration: AppTheme.cardDecoration,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              cifra('${provider.totalRepuestos}', 'REPUESTOS'),
+              separador(),
+              Expanded(
+                child: cifra(
+                  CurrencyFormatter.format(provider.valorInventario),
+                  'VALOR EN BODEGA',
+                  color: AppTheme.primaryLight,
+                ),
+              ),
+              separador(),
+              cifra('$agotados', 'SIN STOCK',
+                  color: agotados > 0 ? AppTheme.error : AppTheme.success),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: SizedBox(
+              height: 6,
+              child: repuestos.isEmpty
+                  ? Container(color: AppTheme.surfaceLight)
+                  : Row(
+                      children: [
+                        tramo(bien, AppTheme.success),
+                        tramo(bajos, AppTheme.warning),
+                        tramo(agotados, AppTheme.error),
+                      ],
+                    ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 14,
+            runSpacing: 4,
+            children: [
+              leyenda(bien, 'bien', AppTheme.success),
+              leyenda(bajos, bajos == 1 ? 'bajo' : 'bajos', AppTheme.warning),
+              leyenda(agotados, agotados == 1 ? 'agotado' : 'agotados',
+                  AppTheme.error),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -384,7 +430,9 @@ class _InventarioScreenState extends State<InventarioScreen> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
+      // Margen abajo para que el botón «Escáner» no tape el último repuesto.
+      padding: const EdgeInsets.fromLTRB(
+          AppTheme.spacingMd, 0, AppTheme.spacingMd, 96),
       itemCount: provider.repuestos.length,
       itemBuilder: (context, index) {
         final repuesto = provider.repuestos[index];

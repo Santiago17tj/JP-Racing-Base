@@ -177,8 +177,8 @@ void main() {
       repuesto('Bomba de aceite nkd', 1, 850000),
     ]);
 
-    expect(find.text('Cotización'), findsOneWidget);
-    expect(find.text('Factura de servicio'), findsOneWidget); // solo el título
+    expect(find.text('Cotización'), findsOneWidget); // el título
+    expect(find.text('Factura de servicio'), findsNothing);
   });
 
   testWidgets('sin ítems lo dice en vez de mostrar un hueco', (tester) async {

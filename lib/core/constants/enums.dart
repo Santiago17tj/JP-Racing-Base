@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 /// Categorías de repuestos del inventario.
 enum CategoriaRepuesto {
   frenos('FRENOS', 'Frenos', '🛑'),
@@ -15,7 +17,24 @@ enum CategoriaRepuesto {
   const CategoriaRepuesto(this.value, this.label, this.icon);
   final String value;
   final String label;
+
+  /// Emoji de la categoría. Ya no se pinta en la app (se ve distinto en cada
+  /// teléfono): la interfaz usa [iconData].
   final String icon;
+
+  IconData get iconData => switch (this) {
+        frenos => Icons.disc_full_outlined,
+        motor => Icons.settings_outlined,
+        electrico => Icons.bolt_outlined,
+        transmision => Icons.link_rounded,
+        suspension => Icons.height_rounded,
+        carroceria => Icons.two_wheeler_rounded,
+        llantas => Icons.trip_origin_rounded,
+        lubricantes => Icons.water_drop_outlined,
+        filtros => Icons.filter_alt_outlined,
+        accesorios => Icons.backpack_outlined,
+        otros => Icons.category_outlined,
+      };
 
   static CategoriaRepuesto fromValue(String value) {
     return CategoriaRepuesto.values.firstWhere(
@@ -46,12 +65,12 @@ enum TipoMovimiento {
 
 /// Estados de la orden de mantenimiento (Flujo del taller).
 enum EstadoOrden {
-  ingresada('Ingresada', 'Ingresada', 0xFF3B82F6),
-  enDiagnostico('En Diagnóstico', 'En Diagnóstico', 0xFFF59E0B),
-  enReparacion('En Reparación', 'En Reparación', 0xFF8B5CF6),
-  listaParaEntrega('Lista para Entrega', 'Lista para Entrega', 0xFF10B981),
-  entregada('Entregada', 'Entregada', 0xFF64748B),
-  cancelada('Cancelada', 'Cancelada', 0xFFEF4444);
+  ingresada('Ingresada', 'Ingresada', 0xFF5B8DEF),
+  enDiagnostico('En Diagnóstico', 'En Diagnóstico', 0xFFF5B82E),
+  enReparacion('En Reparación', 'En Reparación', 0xFFFF8A45),
+  listaParaEntrega('Lista para Entrega', 'Lista para Entrega', 0xFF2FBF71),
+  entregada('Entregada', 'Entregada', 0xFF8A8F98),
+  cancelada('Cancelada', 'Cancelada', 0xFFF0524F);
 
   const EstadoOrden(this.value, this.label, this.colorValue);
   final String value;
