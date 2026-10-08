@@ -1,0 +1,57 @@
+# Evita que Supabase pause el proyecto por inactividad.
+#
+# El plan gratuito pausa un proyecto tras ~7 días sin peticiones a la API. Con
+# un taller usándolo a diario no ocurre, pero Johan puede estar de viaje y la
+# base es la de producción: si se pausa, la app deja de sincronizar sin avisar.
+#
+# Por qué aquí y no en una tarea programada de Claude: esas corren en un entorno
+# cuyo proxy de salida bloquea *.supabase.co (se comprobó el 08/10/2026). Los
+# ejecutores de GitHub sí tienen salida abierta.
+#
+# Si Supabase no responde 200, el trabajo FALLA y GitHub le escribe un correo a
+# quien administra el repositorio: ese correo es el aviso.
+#
+# Ojo: GitHub desactiva solo los workflows programados cuando el repositorio
+# pasa 60 días sin actividad (commits). Si algún día llega ese correo, o este
+# workflow aparece como «disabled» en la pestaña Actions, se reactiva a mano.
+
+name: Mantener despierto Supabase
+
+on:
+  schedule:
+    # Lunes y jueves, 09:13 UTC (04:13 en Bogotá). Un minuto «raro» a propósito:
+    # las horas en punto son las más congestionadas y GitHub retrasa o salta
+    # ejecuciones programadas.
+    - cron: '13 9 * * 1,4'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    name: Petición a la API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Consultar la API sin sesión
+        env:
+          # La clave publicable ya es pública: va dentro de la app y en el
+          # repositorio (lib/core/config/app_config.dart). No es un secreto.
+          SUPABASE_URL: https://snzqauzmtydcheryfwmd.supabase.co
+          SUPABASE_ANON_KEY: sb_publishable_guKJMkQemsuYGvjAhjwSDg_XYsfQtQp
+        run: |
+          # Sin sesión, la RLS deja la tabla vacía: devuelve `[]` con 200. Lo que
+          # cuenta es que la petición llegue, no lo que devuelva.
+          codigo=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --retry 3 --retry-delay 15 --retry-all-errors --max-time 30 \
+            "$SUPABASE_URL/rest/v1/perfil_taller?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY") || codigo="sin respuesta"
+
+          echo "Respuesta de Supabase: $codigo"
+
+          if [ "$codigo" != "200" ]; then
+            echo "::error title=Supabase no respondió 200::Código: $codigo. Puede que el proyecto esté pausado; revisar https://supabase.com/dashboard/project/snzqauzmtydcheryfwmd"
+            exit 1
+          fi
+
+          echo "Actividad registrada en Supabase."
